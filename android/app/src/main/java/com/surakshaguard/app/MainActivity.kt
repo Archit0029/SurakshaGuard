@@ -42,23 +42,33 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ScreenShare
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -85,7 +95,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 
 /**
- * Suraksha Guard Setup, Monitoring & QR Phishing Interceptor Activity.
+ * Suraksha Guard — Premium Multi-Screen Security Dashboard & UPI Threat Interceptor Activity.
  */
 class MainActivity : ComponentActivity() {
 
@@ -112,15 +122,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    background = Color(0xFF0A0A1A),
-                    surface = Color(0xFF111827),
+                    background = Color(0xFF070B14),
+                    surface = Color(0xFF0F172A),
                     primary = Color(0xFF10B981),
                     error = Color(0xFFEF4444)
                 )
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFF0A0A1A)
+                    color = Color(0xFF070B14)
                 ) {
                     LaunchedEffect(Unit) {
                         while (true) {
@@ -129,7 +139,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    SetupScreen(
+                    MainAppNavigation(
                         isProtectionArmed = isProtectionArmed,
                         onToggleMasterProtection = { toggleMasterProtection() },
                         hasOverlay = hasOverlayPermission,
@@ -163,7 +173,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         loadPreferences()
         updatePermissionStates()
-        ensureSentinelRunning()
     }
 
     private fun loadPreferences() {
@@ -199,11 +208,6 @@ class MainActivity : ComponentActivity() {
         ) == PackageManager.PERMISSION_GRANTED
         isCallActive = ThreatDetector.checkActivePhoneCall(this)
         detectedRemoteApp = ThreatDetector.checkActiveRemoteApp(this)
-    }
-
-    private fun ensureSentinelRunning() {
-        // PaymentMonitorService is an AccessibilityService bound and managed directly
-        // by the Android Accessibility Framework once enabled in system settings.
     }
 
     private fun requestOverlayPermission() {
@@ -242,6 +246,31 @@ class MainActivity : ComponentActivity() {
             Uri.parse("package:$packageName")
         )
         startActivity(intent)
+    }
+
+    private fun triggerDebitOtpTest() {
+        val sampleSms = "HDFC Bank Alert: OTP is 849201 for debit of INR 25,000.00 from a/c **4021. Do not share OTP with anyone."
+        val analysis = DebitOtpEngine.analyze(sampleSms, "HDFCBK", this)
+        val testIntent = Intent(this, BlockOverlayService::class.java).apply {
+            putExtra(PaymentMonitorService.EXTRA_TARGET_PACKAGE, analysis.bankOrCard ?: "HDFC Bank")
+            putExtra(PaymentMonitorService.EXTRA_TARGET_APP_NAME, "Bank Debit OTP: ${analysis.bankOrCard ?: "HDFC Bank"}")
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TYPE, ThreatType.SUSPICIOUS_DEBIT_OTP.name)
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE, analysis.threatTitle)
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE_HI, analysis.threatTitleHindi)
+            putExtra(
+                PaymentMonitorService.EXTRA_THREAT_DESC,
+                "${analysis.explanation}\n\n• Debiting Amount: ₹25,000.00\n• OTP Code: 849201\n• Source: HDFC Bank (A/c **4021)"
+            )
+            putExtra(PaymentMonitorService.EXTRA_THREAT_DESC_HI, analysis.explanationHindi)
+            putExtra(PaymentMonitorService.EXTRA_DETECTED_KEYWORD, "OTP: 849201 | ₹25,000")
+            putExtra(PaymentMonitorService.EXTRA_FULL_TEXT, sampleSms)
+            putExtra(PaymentMonitorService.EXTRA_ACTION_GUIDE, analysis.actionAdvice)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(testIntent)
+        } else {
+            startService(testIntent)
+        }
     }
 
     private fun triggerActiveCallTest() {
@@ -296,31 +325,6 @@ class MainActivity : ComponentActivity() {
             )
             putExtra(PaymentMonitorService.EXTRA_DETECTED_KEYWORD, "AnyDesk Remote Desktop")
             putExtra(PaymentMonitorService.EXTRA_FULL_TEXT, "Simulated screen share interception")
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(testIntent)
-        } else {
-            startService(testIntent)
-        }
-    }
-
-    private fun triggerDebitOtpTest() {
-        val sampleSms = "HDFC Bank Alert: OTP is 849201 for debit of INR 25,000.00 from a/c **4021. Do not share OTP with anyone."
-        val analysis = DebitOtpEngine.analyze(sampleSms, "HDFCBK", this)
-        val testIntent = Intent(this, BlockOverlayService::class.java).apply {
-            putExtra(PaymentMonitorService.EXTRA_TARGET_PACKAGE, analysis.bankOrCard ?: "HDFC Bank")
-            putExtra(PaymentMonitorService.EXTRA_TARGET_APP_NAME, "Bank Debit OTP: ${analysis.bankOrCard ?: "HDFC Bank"}")
-            putExtra(PaymentMonitorService.EXTRA_THREAT_TYPE, ThreatType.SUSPICIOUS_DEBIT_OTP.name)
-            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE, analysis.threatTitle)
-            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE_HI, analysis.threatTitleHindi)
-            putExtra(
-                PaymentMonitorService.EXTRA_THREAT_DESC,
-                "${analysis.explanation}\n\n• Debiting Amount: ₹25,000.00\n• OTP Code: 849201\n• Source: HDFC Bank (A/c **4021)"
-            )
-            putExtra(PaymentMonitorService.EXTRA_THREAT_DESC_HI, analysis.explanationHindi)
-            putExtra(PaymentMonitorService.EXTRA_DETECTED_KEYWORD, "OTP: 849201 | ₹25,000")
-            putExtra(PaymentMonitorService.EXTRA_FULL_TEXT, sampleSms)
-            putExtra(PaymentMonitorService.EXTRA_ACTION_GUIDE, analysis.actionAdvice)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(testIntent)
@@ -438,8 +442,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Clean Tab Model for Multi-Page Figma-Style App Architecture.
+ */
+enum class AppTab(
+    val title: String,
+    val icon: ImageVector
+) {
+    SHIELD("Shield", Icons.Default.Security),
+    SCANNER("QR Guard", Icons.Default.QrCodeScanner),
+    PERMISSIONS("Setup", Icons.Default.Lock),
+    SANDBOX("Testing", Icons.Default.Science)
+}
+
+/**
+ * Main Scaffolding Container managing multi-page tab routing and glassmorphism bottom navigation.
+ */
 @Composable
-fun SetupScreen(
+fun MainAppNavigation(
     isProtectionArmed: Boolean,
     onToggleMasterProtection: () -> Unit,
     hasOverlay: Boolean,
@@ -461,19 +481,99 @@ fun SetupScreen(
     onTestActiveCall: () -> Unit,
     onTestRemoteShare: () -> Unit
 ) {
+    var selectedTab by remember { mutableStateOf(AppTab.SHIELD) }
+    val hasPendingPermissions = !hasOverlay || !hasUsageAccess || !hasAccessibility || !hasSmsAccess
+    val hasLiveThreat = isCallActive || (detectedRemoteApp != null)
+
+    Scaffold(
+        containerColor = Color(0xFF070B14),
+        bottomBar = {
+            SurakshaBottomNavigationBar(
+                currentTab = selectedTab,
+                onTabSelected = { selectedTab = it },
+                hasPendingPermissions = hasPendingPermissions,
+                hasLiveThreat = hasLiveThreat
+            )
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            when (selectedTab) {
+                AppTab.SHIELD -> ShieldScreen(
+                    isProtectionArmed = isProtectionArmed,
+                    onToggleMasterProtection = onToggleMasterProtection,
+                    hasOverlay = hasOverlay,
+                    hasUsageAccess = hasUsageAccess,
+                    hasAccessibility = hasAccessibility,
+                    hasSmsAccess = hasSmsAccess,
+                    isDemoMode = isDemoMode,
+                    isCallActive = isCallActive,
+                    detectedRemoteApp = detectedRemoteApp,
+                    onToggleDemoMode = onToggleDemoMode,
+                    onNavigateToPermissions = { selectedTab = AppTab.PERMISSIONS }
+                )
+
+                AppTab.SCANNER -> QrScannerScreen(
+                    onTestQrBlocker = onTestQrBlocker,
+                    hasOverlay = hasOverlay
+                )
+
+                AppTab.PERMISSIONS -> PermissionsScreen(
+                    hasOverlay = hasOverlay,
+                    hasUsageAccess = hasUsageAccess,
+                    hasAccessibility = hasAccessibility,
+                    hasSmsAccess = hasSmsAccess,
+                    onRequestOverlay = onRequestOverlay,
+                    onRequestUsageAccess = onRequestUsageAccess,
+                    onRequestAccessibility = onRequestAccessibility,
+                    onRequestSmsAccess = onRequestSmsAccess,
+                    onOpenAppInfo = onOpenAppInfo
+                )
+
+                AppTab.SANDBOX -> SandboxScreen(
+                    hasOverlay = hasOverlay,
+                    onRequestOverlay = onRequestOverlay,
+                    onTestBlocker = onTestBlocker,
+                    onTestDebitOtp = onTestDebitOtp,
+                    onTestActiveCall = onTestActiveCall,
+                    onTestRemoteShare = onTestRemoteShare
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Screen 1: ShieldScreen (Clean Hero Dashboard, Power Button & Live Sensors).
+ */
+@Composable
+fun ShieldScreen(
+    isProtectionArmed: Boolean,
+    onToggleMasterProtection: () -> Unit,
+    hasOverlay: Boolean,
+    hasUsageAccess: Boolean,
+    hasAccessibility: Boolean,
+    hasSmsAccess: Boolean,
+    isDemoMode: Boolean,
+    isCallActive: Boolean,
+    detectedRemoteApp: RemoteAppInfo?,
+    onToggleDemoMode: (Boolean) -> Unit,
+    onNavigateToPermissions: () -> Unit
+) {
     val isSystemProtected = hasOverlay && hasUsageAccess
     val isFullyGuarded = isSystemProtected && hasAccessibility && hasSmsAccess
-    var selectedQrDemo by remember { mutableStateOf<String?>(null) }
-    var qrAnalysis by remember { mutableStateOf<QrThreatAnalysis?>(null) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // App Header
+        // App Header & Protection Status Chip
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -484,169 +584,129 @@ fun SetupScreen(
                     text = "Suraksha Guard",
                     color = Color.White,
                     fontSize = 24.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp
                 )
                 Text(
-                    text = "Real-Time Payment, QR & Debit OTP Interceptor",
+                    text = "Real-Time Payment, QR & OTP Sentinel",
                     color = Color(0xFF38BDF8),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
-            Icon(
-                imageVector = Icons.Default.Security,
-                contentDescription = null,
-                tint = if (!isProtectionArmed) Color(0xFFEF4444) else if (isFullyGuarded) Color(0xFF10B981) else if (isSystemProtected) Color(0xFF38BDF8) else Color(0xFFF59E0B),
-                modifier = Modifier.size(36.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        if (!isProtectionArmed) Color(0xFF330C12)
+                        else if (isFullyGuarded) Color(0xFF042F2C)
+                        else Color(0xFF331E05)
+                    )
+                    .border(
+                        1.dp,
+                        if (!isProtectionArmed) Color(0xFFEF4444)
+                        else if (isFullyGuarded) Color(0xFF10B981)
+                        else Color(0xFFF59E0B),
+                        RoundedCornerShape(20.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = if (!isProtectionArmed) "PAUSED"
+                    else if (isFullyGuarded) "100% GUARDED"
+                    else "SETUP NEEDED",
+                    color = if (!isProtectionArmed) Color(0xFFFCA5A5)
+                    else if (isFullyGuarded) Color(0xFF34D399)
+                    else Color(0xFFFDE68A),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(2.dp))
-
-        // ── VPN-Style Master Power Switch Hero Section ──
+        // VPN Master Power Hero Button
         VpnPowerHeroCard(
             isArmed = isProtectionArmed,
             onToggle = onToggleMasterProtection
         )
 
-        // System Protection Status Badge Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                    1.dp,
-                    if (!isProtectionArmed) Color(0xFFEF4444) else if (isFullyGuarded) Color(0xFF059669) else if (isSystemProtected) Color(0xFF0284C7) else Color(0xFFD97706),
-                    RoundedCornerShape(16.dp)
-                ),
-            colors = CardDefaults.cardColors(
-                containerColor = if (!isProtectionArmed) Color(0xFF260D12) else if (isFullyGuarded) Color(0xFF06281E) else if (isSystemProtected) Color(0xFF0B1E2E) else Color(0xFF2E1B05)
-            ),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(
+        // Action prompt if permissions are incomplete
+        if (!isFullyGuarded && isProtectionArmed) {
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .border(1.dp, Color(0xFFD97706), RoundedCornerShape(14.dp))
+                    .clickable(onClick = onNavigateToPermissions),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF261905)),
+                shape = RoundedCornerShape(14.dp)
             ) {
-                Icon(
-                    imageVector = if (!isProtectionArmed) Icons.Default.Warning else if (isFullyGuarded) Icons.Default.CheckCircle else if (isSystemProtected) Icons.Default.Security else Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = if (!isProtectionArmed) Color(0xFFEF4444) else if (isFullyGuarded) Color(0xFF34D399) else if (isSystemProtected) Color(0xFF38BDF8) else Color(0xFFFBBF24),
-                    modifier = Modifier.size(32.dp)
-                )
-
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Column {
-                    Text(
-                        text = when {
-                            !isProtectionArmed -> "⚠️ SENTINEL DISARMED (POWER OFF)"
-                            isFullyGuarded -> "100% COMPLETE PROTECTION ARMED"
-                            isSystemProtected -> "CORE PROTECTION ARMED"
-                            else -> "SETUP REQUIRED"
-                        },
-                        color = when {
-                            !isProtectionArmed -> Color(0xFFEF4444)
-                            isFullyGuarded -> Color(0xFF34D399)
-                            isSystemProtected -> Color(0xFF38BDF8)
-                            else -> Color(0xFFFBBF24)
-                        },
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFFBBF24),
+                        modifier = Modifier.size(24.dp)
                     )
-                    Text(
-                        text = when {
-                            !isProtectionArmed -> "The Master Power switch is OFF. Background services are sleeping and will NOT intercept payment apps or OTPs until re-armed."
-                            isFullyGuarded -> if (isDemoMode)
-                                "Demo Mode active: Payment apps will be blocked for testing."
-                            else
-                                "Complete Protection: Screen-sharing, active calls, In-App QR scans, and bank debit OTPs are all guarded."
-                            isSystemProtected -> "Core protection active. Enable In-App QR and SMS OTP protection below for complete security."
-                            else -> "Grant the permissions below to arm background protection."
-                        },
-                        color = Color(0xFFCBD5E1),
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Privileges Setup Incomplete",
+                            color = Color(0xFFFDE68A),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Tap here to complete OS permissions and enable 100% protection.",
+                            color = Color(0xFFD4D4D8),
+                            fontSize = 10.5.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = Color(0xFFFBBF24),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
         }
 
-        // Mode Configuration Card: Live Protection vs Demo Mode
+        // Live Environment Telemetry Sensors Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(
-                    1.dp,
-                    if (isDemoMode) Color(0xFF0284C7) else Color(0xFF059669),
-                    RoundedCornerShape(16.dp)
-                ),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isDemoMode) Color(0xFF0B1E2E) else Color(0xFF081F1A)
-            ),
+                .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(16.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isDemoMode) "🧪 Demo Simulation Mode (ON)" else "🛡️ Live Fraud Protection (Active)",
-                            color = if (isDemoMode) Color(0xFF38BDF8) else Color(0xFF34D399),
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (isDemoMode)
-                                "Always blocks payments when Google Pay/Paytm is opened (for hackathon demo)."
-                            else
-                                "Only blocks when an active call, screen share, or fraud QR is detected. Safe payments pass smoothly.",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp,
-                            modifier = Modifier.padding(top = 4.dp, end = 8.dp)
-                        )
-                    }
+                    Text(
+                        text = "LIVE ENVIRONMENT SENSORS",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
 
-                    Switch(
-                        checked = isDemoMode,
-                        onCheckedChange = onToggleDemoMode,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF0284C7),
-                            uncheckedThumbColor = Color(0xFF94A3B8),
-                            uncheckedTrackColor = Color(0xFF1E293B)
-                        )
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(if (isProtectionArmed) Color(0xFF10B981) else Color(0xFFEF4444))
                     )
                 }
-            }
-        }
-
-        // Live Threat Telemetry Sensors Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(16.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "LIVE ENVIRONMENT SENSORS",
-                    color = Color(0xFF94A3B8),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
 
                 SensorRow(
                     icon = Icons.Default.Call,
@@ -678,9 +738,9 @@ fun SetupScreen(
                     statusText = if (!isProtectionArmed)
                         "PAUSED (Power Switch OFF)"
                     else if (hasAccessibility)
-                        "ACTIVE (Google Pay / PhonePe Shielded)"
+                        "ACTIVE (Google Pay / PhonePe Guarded)"
                     else
-                        "INACTIVE (Enable Permission #3)",
+                        "INACTIVE (Setup Required)",
                     isSafe = isProtectionArmed && hasAccessibility
                 )
 
@@ -692,48 +752,121 @@ fun SetupScreen(
                     else if (hasSmsAccess)
                         "ACTIVE (Real-Time Bank SMS Guarded)"
                     else
-                        "INACTIVE (Enable Permission #4)",
+                        "INACTIVE (Setup Required)",
                     isSafe = isProtectionArmed && hasSmsAccess
                 )
             }
         }
 
-        // ── QR Code Fraud & Phishing Interceptor Showcase ──
+        // Mode Configuration Card: Live Protection vs Demo Mode
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, Color(0xFF0284C7), RoundedCornerShape(16.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1928)),
+                .border(
+                    1.dp,
+                    if (isDemoMode) Color(0xFF0284C7) else Color(0xFF059669),
+                    RoundedCornerShape(16.dp)
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDemoMode) Color(0xFF0A1C2C) else Color(0xFF06241E)
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isDemoMode) "🧪 Demo Simulation Mode (Active)" else "🛡️ Live Fraud Shield (Guarding)",
+                            color = if (isDemoMode) Color(0xFF38BDF8) else Color(0xFF34D399),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isDemoMode)
+                                "Always blocks payments when Google Pay or PhonePe is opened (for testing & presentations)."
+                            else
+                                "Only intercepts genuine threats (active calls, AnyDesk, phishing QRs, debit OTPs). Safe payments pass smoothly.",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 10.5.sp,
+                            lineHeight = 14.sp,
+                            modifier = Modifier.padding(top = 4.dp, end = 8.dp)
+                        )
+                    }
+
+                    Switch(
+                        checked = isDemoMode,
+                        onCheckedChange = onToggleDemoMode,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFF0284C7),
+                            uncheckedThumbColor = Color(0xFF94A3B8),
+                            uncheckedTrackColor = Color(0xFF1E293B)
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Screen 2: QrScannerScreen (Dedicated QR Code Phishing & Scam Inspector).
+ */
+@Composable
+fun QrScannerScreen(
+    onTestQrBlocker: (String) -> Unit,
+    hasOverlay: Boolean
+) {
+    var selectedQrDemo by remember { mutableStateOf<String?>(null) }
+    var qrAnalysis by remember { mutableStateOf<QrThreatAnalysis?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Section Header
+        Column {
+            Text(
+                text = "QR Code Fraud Detector",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Inspect and test how Suraksha Guard analyzes UPI deep-links to block QR traps before you authorize payments.",
+                color = Color(0xFF94A3B8),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp
+            )
+        }
+
+        // Preset Test Scenarios
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(16.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.QrCodeScanner,
-                        contentDescription = null,
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "QR CODE PHISHING & FRAUD DETECTOR",
-                        color = Color(0xFF38BDF8),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
                 Text(
-                    text = "Suraksha Guard intercepts UPI deep-links whenever a QR is scanned. Test common Indian QR scams below:",
-                    color = Color(0xFF94A3B8),
+                    text = "SELECT SCAM PATTERN TO TEST",
+                    color = Color(0xFF38BDF8),
                     fontSize = 11.sp,
-                    lineHeight = 15.sp
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
                 )
 
-                // Quick Preset Buttons for Testing Scam QRs
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -746,10 +879,10 @@ fun SetupScreen(
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B090F)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                     ) {
-                        Text(text = "⚡ Fake Electricity QR", fontSize = 10.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
+                        Text(text = "⚡ Fake Electricity", fontSize = 10.5.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
                     }
 
                     Button(
@@ -760,10 +893,10 @@ fun SetupScreen(
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B090F)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                     ) {
-                        Text(text = "🎁 'Cashback' Trap QR", fontSize = 10.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
+                        Text(text = "🎁 'Cashback' Trap", fontSize = 10.5.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -779,10 +912,10 @@ fun SetupScreen(
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B090F)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                     ) {
-                        Text(text = "🔗 Malicious Link QR", fontSize = 10.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
+                        Text(text = "🔗 Malicious Link", fontSize = 10.5.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
                     }
 
                     Button(
@@ -792,113 +925,203 @@ fun SetupScreen(
                             qrAnalysis = QrThreatEngine.analyze(qr)
                         },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF063628)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF042F2C)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
                     ) {
-                        Text(text = "✅ Clean Grocery QR", fontSize = 10.sp, color = Color(0xFFA7F3D0), fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Display Live Analysis Result
-                if (qrAnalysis != null) {
-                    val analysis = qrAnalysis!!
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(
-                                1.dp,
-                                if (analysis.isFraud) Color(0xFFEF4444) else Color(0xFF10B981),
-                                RoundedCornerShape(12.dp)
-                            ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (analysis.isFraud) Color(0xFF1F0609) else Color(0xFF041C15)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (analysis.isFraud) "🚨 FRAUD QR DETECTED" else "✅ VERIFIED SAFE QR",
-                                    color = if (analysis.isFraud) Color(0xFFEF4444) else Color(0xFF34D399),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (analysis.isFraud) Color(0xFFDC2626) else Color(0xFF059669))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "Risk: ${analysis.riskScore}/100",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-                            Text(
-                                text = analysis.title,
-                                color = Color.White,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-
-                            Text(
-                                text = "• Payee: ${analysis.payeeName} (${analysis.payeeVpa})\n• Amount: ${if (analysis.requestedAmount != null) "₹" + analysis.requestedAmount else "Variable"}",
-                                color = Color(0xFFCBD5E1),
-                                fontSize = 10.5.sp,
-                                lineHeight = 14.sp
-                            )
-
-                            Text(
-                                text = analysis.explanation,
-                                color = Color(0xFF94A3B8),
-                                fontSize = 10.sp,
-                                lineHeight = 13.sp
-                            )
-
-                            if (analysis.isFraud) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Button(
-                                    onClick = { onTestQrBlocker(selectedQrDemo!!) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(vertical = 6.dp)
-                                ) {
-                                    Text(
-                                        text = "Simulate Full Blocker for this Fraud QR",
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
+                        Text(text = "✅ Clean Grocery", fontSize = 10.5.sp, color = Color(0xFFA7F3D0), fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
-        Text(
-            text = "REQUIRED OS PRIVILEGES",
-            color = Color(0xFF94A3B8),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.5.sp
-        )
+        // Live Analysis Output Card
+        if (qrAnalysis != null) {
+            val analysis = qrAnalysis!!
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.dp,
+                        if (analysis.isFraud) Color(0xFFEF4444) else Color(0xFF10B981),
+                        RoundedCornerShape(14.dp)
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (analysis.isFraud) Color(0xFF26080D) else Color(0xFF052119)
+                ),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (analysis.isFraud) "🚨 FRAUD DETECTED" else "🛡️ VERIFIED SAFE QR",
+                            color = if (analysis.isFraud) Color(0xFFEF4444) else Color(0xFF10B981),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
 
-        // Card 1: Draw Over Other Apps (Overlay Permission)
+                        Text(
+                            text = "Risk: ${analysis.riskScore}/100",
+                            color = if (analysis.isFraud) Color(0xFFFCA5A5) else Color(0xFFA7F3D0),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Text(
+                        text = analysis.title,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "• Payee: ${analysis.payeeName}\n• VPA: ${analysis.payeeVpa}\n• Type: ${analysis.fraudType}",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF110306))
+                            .padding(10.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = analysis.explanation,
+                                color = Color(0xFFF1F5F9),
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = analysis.explanationHindi,
+                                color = Color(0xFFCBD5E1),
+                                fontSize = 10.5.sp,
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
+
+                    if (analysis.isFraud) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = { selectedQrDemo?.let { onTestQrBlocker(it) } },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = hasOverlay,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                text = if (hasOverlay) "🛑 Preview Blocker Shield for this QR" else "Grant Overlay Permission First",
+                                color = Color.White,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Screen 3: PermissionsScreen (Dedicated Step-by-Step System Privileges Hub).
+ */
+@Composable
+fun PermissionsScreen(
+    hasOverlay: Boolean,
+    hasUsageAccess: Boolean,
+    hasAccessibility: Boolean,
+    hasSmsAccess: Boolean,
+    onRequestOverlay: () -> Unit,
+    onRequestUsageAccess: () -> Unit,
+    onRequestAccessibility: () -> Unit,
+    onRequestSmsAccess: () -> Unit,
+    onOpenAppInfo: () -> Unit
+) {
+    val totalGranted = listOf(hasOverlay, hasUsageAccess, hasAccessibility, hasSmsAccess).count { it }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Column {
+            Text(
+                text = "System Privileges & Setup",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Required Android OS permissions to monitor UPI applications, intercept screen sharing, and protect against OTP fraud.",
+                color = Color(0xFF94A3B8),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp
+            )
+        }
+
+        // Progress Overview Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    1.dp,
+                    if (totalGranted == 4) Color(0xFF10B981) else Color(0xFF0284C7),
+                    RoundedCornerShape(14.dp)
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (totalGranted == 4) Color(0xFF042F2C) else Color(0xFF0A1C2C)
+            ),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (totalGranted == 4) Icons.Default.CheckCircle else Icons.Default.Info,
+                    contentDescription = null,
+                    tint = if (totalGranted == 4) Color(0xFF34D399) else Color(0xFF38BDF8),
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (totalGranted == 4) "All 4 Privileges Granted" else "$totalGranted of 4 Privileges Granted",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (totalGranted == 4)
+                            "Device is 100% armed and ready to protect your payments."
+                        else
+                            "Grant the remaining privileges below to enable complete protection.",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        // Card 1: Draw Over Other Apps
         PermissionCard(
             title = "1. Display Over Other Apps",
             description = "Allows Suraksha Guard to draw the emergency safety shield over payment applications when a threat is active.",
@@ -918,7 +1141,7 @@ fun SetupScreen(
 
         // Card 3: In-App QR Protection (Accessibility Service)
         PermissionCard(
-            title = "3. In-App QR Protection (Google Pay, PhonePe, Paytm)",
+            title = "3. In-App QR Protection (Google Pay, PhonePe)",
             description = "Inspects visible on-screen text nodes inside UPI payment apps to detect fraud keywords (urgent, AnyDesk, fake cashback). Enable 'SurakshaGuard' under Downloaded Apps / Installed Services.",
             isGranted = hasAccessibility,
             buttonText = "Enable 'SurakshaGuard' in Accessibility",
@@ -928,127 +1151,302 @@ fun SetupScreen(
             helpNotice = "⚠️ Android 13/14 Notice: If toggle is greyed out / restricted:\n1. Tap 'Step 1: Open App Info' above\n2. Tap the 3 dots (⋮) in top-right corner\n3. Tap 'Allow restricted settings'\n4. Return here and enable 'SurakshaGuard' in Accessibility"
         )
 
-        // Card 4: Debit OTP Fraud Shield (SMS Receiver)
+        // Card 4: Debit OTP Fraud Shield & Phone Call State
         PermissionCard(
-            title = "4. Bank Debit OTP Fraud Shield",
-            description = "Monitors incoming SMS for bank debit OTPs (money being deducted). Instantly intercepts unauthorized deductions and phone-call coercion.",
+            title = "4. Bank Debit OTP & Call Sensor",
+            description = "Monitors incoming SMS for bank debit OTPs (money deductions) and verifies active phone call state during payment initiation.",
             isGranted = hasSmsAccess,
-            buttonText = "Grant SMS Detection Permission",
+            buttonText = "Grant SMS & Call Detection Permission",
             onAction = onRequestSmsAccess
         )
+    }
+}
 
-        Spacer(modifier = Modifier.height(4.dp))
+/**
+ * Screen 4: SandboxScreen (Dedicated Testing & Simulation Lab).
+ */
+@Composable
+fun SandboxScreen(
+    hasOverlay: Boolean,
+    onRequestOverlay: () -> Unit,
+    onTestBlocker: () -> Unit,
+    onTestDebitOtp: () -> Unit,
+    onTestActiveCall: () -> Unit,
+    onTestRemoteShare: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Column {
+            Text(
+                text = "Threat Simulation Lab",
+                color = Color.White,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Preview the full-screen safety shields, vernacular Hindi warnings, and emergency disconnect actions safely without real attacks.",
+                color = Color(0xFF94A3B8),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp
+            )
+        }
 
-        // Demo Sandbox: Immediate Simulation
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, Color(0xFF3730A3), RoundedCornerShape(16.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+        if (!hasOverlay) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(14.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2E090F)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "TEST BLOCKER SHIELD OVERLAY",
-                        color = Color(0xFF38BDF8),
+                        text = "⚠️ Overlay Permission Required",
+                        color = Color(0xFFFECACA),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
+                    Text(
+                        text = "To preview the full-screen safety shield, grant 'Display over other apps' first.",
+                        color = Color(0xFFCBD5E1),
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onRequestOverlay,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(text = "Grant Overlay Permission", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(6.dp))
+        // Test Launcher Cards Grid
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(16.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Text(
-                    text = "Instantly preview the full-screen safety shield, threat explanations, resolution buttons, and 2-min pass.",
+                    text = "SELECT THREAT VECTOR TO SIMULATE",
+                    color = Color(0xFF38BDF8),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+
+                // 1. General Demo Blocker
+                SimulationTestCard(
+                    icon = Icons.Default.Layers,
+                    title = "1. Payment Interception Shield",
+                    description = "Simulates detecting urgent coercion while opening Google Pay.",
+                    buttonText = "Launch Shield Preview",
+                    buttonColor = Color(0xFFDC2626),
+                    enabled = hasOverlay,
+                    onLaunch = onTestBlocker
+                )
+
+                // 2. Bank Debit OTP SMS
+                SimulationTestCard(
+                    icon = Icons.Default.Sms,
+                    title = "2. Bank Debit OTP Alert (₹25,000)",
+                    description = "Simulates receiving an unauthorized bank deduction OTP SMS.",
+                    buttonText = "Test Debit OTP Alert",
+                    buttonColor = Color(0xFFB91C1C),
+                    enabled = hasOverlay,
+                    onLaunch = onTestDebitOtp
+                )
+
+                // 3. Active Phone Call
+                SimulationTestCard(
+                    icon = Icons.Default.Call,
+                    title = "3. Active Phone Call Alert",
+                    description = "Simulates opening a UPI app while talking on a phone call.",
+                    buttonText = "Test Call Warning",
+                    buttonColor = Color(0xFF991B1B),
+                    enabled = hasOverlay,
+                    onLaunch = onTestActiveCall
+                )
+
+                // 4. Remote Screen Share
+                SimulationTestCard(
+                    icon = Icons.AutoMirrored.Filled.ScreenShare,
+                    title = "4. AnyDesk Screen-Share Alert",
+                    description = "Simulates detecting AnyDesk broadcasting your screen with uninstall action.",
+                    buttonText = "Test AnyDesk Alert",
+                    buttonColor = Color(0xFF7F1D1D),
+                    enabled = hasOverlay,
+                    onLaunch = onTestRemoteShare
+                )
+            }
+        }
+
+        // Educational Safe Pass Info
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(14.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0A0F1D)),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "ℹ️ Built-in Safe Pass Architecture",
+                    color = Color(0xFF38BDF8),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Suraksha Guard features a 2-Minute 'I am Safe' pass on the shield overlay. If a user knowingly makes a genuine transaction, tapping the pass temporarily pauses interception for 120 seconds.",
                     color = Color(0xFF94A3B8),
                     fontSize = 11.sp,
                     lineHeight = 15.sp
                 )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Button(
-                    onClick = onTestBlocker,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = hasOverlay,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Layers, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (hasOverlay) "Launch Shield Overlay Preview" else "Grant Overlay Permission First",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Button(
-                    onClick = onTestDebitOtp,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = hasOverlay,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB91C1C)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (hasOverlay) "🧪 Test Debit OTP Alert (₹25,000)" else "Grant Overlay Permission First",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = onTestActiveCall,
-                        modifier = Modifier.weight(1f),
-                        enabled = hasOverlay,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF991B1B)),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-                    ) {
-                        Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "📞 Test Call Alert",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Button(
-                        onClick = onTestRemoteShare,
-                        modifier = Modifier.weight(1f),
-                        enabled = hasOverlay,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7F1D1D)),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ScreenShare, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "🖥️ Test AnyDesk Alert",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
+        }
+    }
+}
+
+/**
+ * Modern Figma-Standard Glassmorphism Bottom Navigation Bar.
+ */
+@Composable
+fun SurakshaBottomNavigationBar(
+    currentTab: AppTab,
+    onTabSelected: (AppTab) -> Unit,
+    hasPendingPermissions: Boolean,
+    hasLiveThreat: Boolean
+) {
+    NavigationBar(
+        containerColor = Color(0xFF0F172A),
+        contentColor = Color.White,
+        tonalElevation = 8.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(width = 1.dp, color = Color(0xFF1E293B))
+    ) {
+        AppTab.values().forEach { tab ->
+            val isSelected = currentTab == tab
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = { onTabSelected(tab) },
+                icon = {
+                    when (tab) {
+                        AppTab.SHIELD -> {
+                            if (hasLiveThreat) {
+                                BadgedBox(badge = { Badge(containerColor = Color(0xFFEF4444)) }) {
+                                    Icon(tab.icon, contentDescription = tab.title)
+                                }
+                            } else {
+                                Icon(tab.icon, contentDescription = tab.title)
+                            }
+                        }
+                        AppTab.PERMISSIONS -> {
+                            if (hasPendingPermissions) {
+                                BadgedBox(badge = { Badge(containerColor = Color(0xFFF59E0B)) }) {
+                                    Icon(tab.icon, contentDescription = tab.title)
+                                }
+                            } else {
+                                Icon(tab.icon, contentDescription = tab.title)
+                            }
+                        }
+                        else -> {
+                            Icon(tab.icon, contentDescription = tab.title)
+                        }
+                    }
+                },
+                label = {
+                    Text(
+                        text = tab.title,
+                        fontSize = 10.5.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF10B981),
+                    selectedTextColor = Color(0xFF10B981),
+                    unselectedIconColor = Color(0xFF64748B),
+                    unselectedTextColor = Color(0xFF64748B),
+                    indicatorColor = Color(0xFF042F2C)
+                )
+            )
+        }
+    }
+}
+
+/**
+ * Reusable Simulation Test Card Component.
+ */
+@Composable
+fun SimulationTestCard(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    buttonText: String,
+    buttonColor: Color,
+    enabled: Boolean,
+    onLaunch: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF070B14))
+            .border(1.dp, Color(0xFF1E293B), RoundedCornerShape(10.dp))
+            .padding(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFF38BDF8),
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = description,
+            color = Color(0xFF94A3B8),
+            fontSize = 10.5.sp,
+            lineHeight = 14.sp
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = onLaunch,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(vertical = 6.dp)
+        ) {
+            Text(
+                text = if (enabled) buttonText else "Grant Overlay Permission First",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -1082,36 +1480,27 @@ fun VpnPowerHeroCard(
         modifier = Modifier
             .fillMaxWidth()
             .border(
-                width = 1.5.dp,
-                brush = if (isArmed) {
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF10B981), Color(0xFF042F2C), Color(0xFF021712))
-                    )
-                } else {
-                    Brush.verticalGradient(
-                        listOf(Color(0xFFEF4444), Color(0xFF3B1219), Color(0xFF17080B))
-                    )
-                },
-                shape = RoundedCornerShape(24.dp)
+                1.dp,
+                if (isArmed) Color(0xFF059669) else Color(0xFF991B1B),
+                RoundedCornerShape(24.dp)
             ),
         colors = CardDefaults.cardColors(
-            containerColor = if (isArmed) Color(0xFF081F1A) else Color(0xFF180A0E)
+            containerColor = if (isArmed) Color(0xFF041E1C) else Color(0xFF1F090E)
         ),
         shape = RoundedCornerShape(24.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 24.dp, horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(vertical = 24.dp, horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Status Pill (VPN Style)
+            // Status Capsule Pill
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(
-                        if (isArmed) Color(0xFF064E3B) else Color(0xFF451A03)
+                        if (isArmed) Color(0xFF064E3B) else Color(0xFF3B1219)
                     )
                     .border(
                         1.dp,
@@ -1148,7 +1537,7 @@ fun VpnPowerHeroCard(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(150.dp)
             ) {
-                // Outer Pulsing Glow Aura (only animates when armed)
+                // Outer Pulsing Glow Aura
                 Box(
                     modifier = Modifier
                         .size(150.dp)
@@ -1302,7 +1691,7 @@ fun PermissionCard(
                 if (isGranted) Color(0xFF1E293B) else Color(0xFF78350F),
                 RoundedCornerShape(14.dp)
             ),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
         shape = RoundedCornerShape(14.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
