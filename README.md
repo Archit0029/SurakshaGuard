@@ -80,10 +80,16 @@ flowchart TD
   - **"📞 Call 1930 (Cyber Crime Helpline)"**: Launches immediate one-tap calling to India's National Cyber Crime reporting portal.
   - **"I am Safe (2-Minute Pass)"**: Emergency temporary bypass if the user explicitly confirms a legitimate transaction.
 
-### 4. Android 13/14 Restricted Settings Unlock Flow
-- Complete, guided Jetpack Compose onboarding screen explaining how to grant accessibility permissions on modern Android versions where Google Play Protect flags sideloaded APKs with *"Restricted setting"*.
+### 4. Real-Time Bank Debit OTP Sentinel (`DebitOtpEngine` & `SmsReceiver`)
+- **Monetary Debit Isolation:** Listens for incoming bank SMS messages via `SmsReceiver` and parses OTPs authorizing outbound fund deductions (e.g. `debit of ₹25,000`, `fund transfer`, `spent on card`).
+- **Zero False Alarms on Benign Messages:** Automatically ignores incoming credit alerts (`credited to account`) and non-financial login codes (`WhatsApp code`, `Zomato verification code`).
+- **Active Call & Screen-Sharing Correlation:** If a debit OTP is received while the user is actively on a phone call or while a remote tool (`AnyDesk`, `TeamViewer`) is active, escalates the warning to **CRITICAL PHISHING/COERCION ALERT**.
+- **Instant Full-Screen Shield & High-Priority Notification:** Deploys the crimson emergency blocker immediately and plays an emergency warning tone warning the user never to disclose the OTP over phone calls or WhatsApp.
 
-### 5. SurakshaPay Web Simulator
+### 5. Android 13/14 Restricted Settings Unlock Flow
+- Complete, guided Jetpack Compose onboarding screen explaining how to grant accessibility and SMS permissions on modern Android versions where Google Play Protect flags sideloaded APKs with *"Restricted setting"*.
+
+### 6. SurakshaPay Web Simulator
 - Full React 18 + Vite + Tailwind CSS interactive dashboard under `src/` to simulate scam calls, SMS extortion, and UPI payment interceptions in a browser environment.
 
 ---
@@ -110,6 +116,8 @@ SurakshaGuard/
 │       │   │   │   ├── MainActivity.kt        # Jetpack Compose UI & permission manager
 │       │   │   │   ├── PaymentMonitorService.kt # Real-time accessibility screen reader
 │       │   │   │   ├── QrThreatEngine.kt      # Heuristic UPI & QR threat intelligence
+│       │   │   │   ├── DebitOtpEngine.kt      # Bank debit OTP extraction & call correlation
+│       │   │   │   ├── SmsReceiver.kt         # BroadcastReceiver for real-time bank SMS
 │       │   │   │   ├── BlockOverlayService.kt # Full-screen emergency blocker overlay
 │       │   │   │   ├── ThreatDetector.kt      # Device call & screen-share state analyzer
 │       │   │   │   └── UpiIntentInterceptorActivity.kt # Camera & link interceptor

@@ -305,5 +305,76 @@ class ThreatDetectorTest {
             assertEquals("Iteration $i failed clean check", ThreatType.NONE, report.type)
         }
     }
+
+    // ── Debit OTP Fraud Interceptor Tests ──
+
+    @Test
+    fun testDebitOtpEngine_sbiDebitOtp_detectedWithAmountAndCode() {
+        val sms = "Dear SBI User, 738291 is your OTP to approve debit of Rs. 14,500.00 from your SBI Card ending 4321 for online txn. Never share OTP."
+        val analysis = DebitOtpEngine.analyze(sms, sender = "SBIBNK")
+
+        assertTrue("SBI debit OTP must be identified as debit OTP", analysis.isDebitOtp)
+        assertEquals("738291", analysis.otpCode)
+        assertEquals("14,500.00", analysis.amount)
+        assertTrue("Bank name must detect SBI", analysis.bankOrCard?.contains("SBI") == true)
+        assertTrue("Threat title must warn of debit OTP", analysis.threatTitle.contains("DEBIT OTP"))
+    }
+
+    @Test
+    fun testDebitOtpEngine_hdfcDebitOtp_detectedWithAmountAndCode() {
+        val sms = "849201 is your secret OTP for debit of INR 49,999.00 from HDFC Bank A/c **1092. Do not disclose."
+        val analysis = DebitOtpEngine.analyze(sms, sender = "HDFCBK")
+
+        assertTrue("HDFC debit OTP must be identified as debit OTP", analysis.isDebitOtp)
+        assertEquals("849201", analysis.otpCode)
+        assertEquals("49,999.00", analysis.amount)
+        assertTrue("Bank name must detect HDFC", analysis.bankOrCard?.contains("HDFC") == true)
+    }
+
+    @Test
+    fun testDebitOtpEngine_iciciTransferOtp_detected() {
+        val sms = "OTP is 192837 for fund transfer of ₹25000 from ICICI Bank account XX3829. Valid for 5 mins."
+        val analysis = DebitOtpEngine.analyze(sms, sender = "ICICIB")
+
+        assertTrue("ICICI fund transfer OTP must be identified as debit OTP", analysis.isDebitOtp)
+        assertEquals("192837", analysis.otpCode)
+        assertEquals("25000", analysis.amount)
+        assertTrue("Bank name must detect ICICI", analysis.bankOrCard?.contains("ICICI") == true)
+    }
+
+    @Test
+    fun testDebitOtpEngine_creditDepositSms_ignored() {
+        val creditSms = "Your account 9912 is credited with INR 5,000.00 on 31-Oct-26. Avl Bal: INR 15,200.00 - PNB"
+        val analysis = DebitOtpEngine.analyze(creditSms, sender = "PNBSMS")
+
+        assertFalse("Credit/deposit SMS must NOT be treated as debit OTP", analysis.isDebitOtp)
+        assertNull(analysis.otpCode)
+        assertNull(analysis.amount)
+    }
+
+    @Test
+    fun testDebitOtpEngine_nonFinancialLoginOtp_ignored() {
+        val waSms = "Your WhatsApp code is 382910. Do not share with anyone."
+        val waAnalysis = DebitOtpEngine.analyze(waSms, sender = "WhatsApp")
+        assertFalse("WhatsApp login code must NOT trigger debit OTP alert", waAnalysis.isDebitOtp)
+
+        val zomatoSms = "Zomato: 5821 is your verification code to log in."
+        val zomatoAnalysis = DebitOtpEngine.analyze(zomatoSms, sender = "ZOMATO")
+        assertFalse("Food app login code must NOT trigger debit OTP alert", zomatoAnalysis.isDebitOtp)
+    }
+
+    @Test
+    fun testDebitOtpEngine_extractAmount_parsesVariousFormats() {
+        assertEquals("15,000", DebitOtpEngine.extractAmount("Payment of ₹15,000 to merchant"))
+        assertEquals("4,999.50", DebitOtpEngine.extractAmount("Debit of INR 4,999.50 authorized"))
+        assertEquals("250", DebitOtpEngine.extractAmount("for Rs. 250 on debit card"))
+    }
+
+    @Test
+    fun testDebitOtpEngine_extractOtpCode_parsesVariousPatterns() {
+        assertEquals("591823", DebitOtpEngine.extractOtpCode("Your OTP is 591823 for txn"))
+        assertEquals("492014", DebitOtpEngine.extractOtpCode("Verification code: 492014"))
+        assertEquals("392019", DebitOtpEngine.extractOtpCode("392019 is your secret OTP to approve"))
+    }
 }
 

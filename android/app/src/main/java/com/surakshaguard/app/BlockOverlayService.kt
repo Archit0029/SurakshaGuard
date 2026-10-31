@@ -345,6 +345,38 @@ class BlockOverlayService : Service() {
             }
             cardLayout.addView(qrNoticeBox, qrLp)
 
+        } else if (threatType == ThreatType.SUSPICIOUS_DEBIT_OTP) {
+            // Debit OTP Received Notice
+            val otpNoticeBox = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#3B090F"))
+                    cornerRadius = dp(10).toFloat()
+                    setStroke(dp(1), Color.parseColor("#EF4444"))
+                }
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+            }
+            val otpNoticeText = TextView(context).apply {
+                text = if (actionGuide.isNotBlank()) {
+                    "🚨 Debit OTP Rule: $actionGuide"
+                } else {
+                    "🚨 Debit OTP Rule: Never share this OTP over call, SMS, or WhatsApp. Bank employees NEVER ask for your OTP."
+                }
+                textSize = 12f
+                setTextColor(Color.parseColor("#FECACA"))
+                setTypeface(typeface, Typeface.BOLD)
+                setLineSpacing(dp(2).toFloat(), 1.15f)
+            }
+            otpNoticeBox.addView(otpNoticeText)
+
+            val otpLp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dp(10)
+            }
+            cardLayout.addView(otpNoticeBox, otpLp)
+
         } else if (threatType == ThreatType.DEMO_MODE) {
             // Demo Mode Notice
             val demoNoticeBox = LinearLayout(context).apply {

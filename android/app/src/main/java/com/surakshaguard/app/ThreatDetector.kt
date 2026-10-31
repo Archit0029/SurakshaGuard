@@ -16,7 +16,8 @@ enum class ThreatType {
     REMOTE_SCREEN_SHARE,
     ACTIVE_PHONE_CALL,
     FRAUD_QR_CODE,
-    DEMO_MODE
+    DEMO_MODE,
+    SUSPICIOUS_DEBIT_OTP
 }
 
 data class ThreatReport(

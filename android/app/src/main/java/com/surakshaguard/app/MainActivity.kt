@@ -1,9 +1,11 @@
 package com.surakshaguard.app
 
+import android.Manifest
 import android.app.AppOpsManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +13,7 @@ import android.provider.Settings
 import android.text.TextUtils
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +39,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -71,9 +75,16 @@ class MainActivity : ComponentActivity() {
     private var hasOverlayPermission by mutableStateOf(false)
     private var hasUsagePermission by mutableStateOf(false)
     private var hasAccessibilityPermission by mutableStateOf(false)
+    private var hasSmsPermission by mutableStateOf(false)
     private var isDemoMode by mutableStateOf(false)
     private var isCallActive by mutableStateOf(false)
     private var detectedRemoteApp by mutableStateOf<RemoteAppInfo?>(null)
+
+    private val requestSmsPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        updatePermissionStates()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,6 +108,7 @@ class MainActivity : ComponentActivity() {
                         hasOverlay = hasOverlayPermission,
                         hasUsageAccess = hasUsagePermission,
                         hasAccessibility = hasAccessibilityPermission,
+                        hasSmsAccess = hasSmsPermission,
                         isDemoMode = isDemoMode,
                         isCallActive = isCallActive,
                         detectedRemoteApp = detectedRemoteApp,
@@ -107,9 +119,11 @@ class MainActivity : ComponentActivity() {
                         onRequestOverlay = { requestOverlayPermission() },
                         onRequestUsageAccess = { requestUsageAccessPermission() },
                         onRequestAccessibility = { requestAccessibilityPermission() },
+                        onRequestSmsAccess = { requestSmsPermission() },
                         onOpenAppInfo = { openAppInfoForRestrictedSettings() },
                         onTestBlocker = { triggerTestBlocker() },
-                        onTestQrBlocker = { sampleQr -> triggerQrBlockerTest(sampleQr) }
+                        onTestQrBlocker = { sampleQr -> triggerQrBlockerTest(sampleQr) },
+                        onTestDebitOtp = { triggerDebitOtpTest() }
                     )
                 }
             }
@@ -137,6 +151,10 @@ class MainActivity : ComponentActivity() {
         hasOverlayPermission = isOverlayPermissionGranted(this)
         hasUsagePermission = isUsageAccessGranted(this)
         hasAccessibilityPermission = isAccessibilityServiceEnabled(this)
+        hasSmsPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECEIVE_SMS
+        ) == PackageManager.PERMISSION_GRANTED
         isCallActive = ThreatDetector.checkActivePhoneCall(this)
         detectedRemoteApp = ThreatDetector.checkActiveRemoteApp(this)
     }
@@ -166,12 +184,46 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 
+    private fun requestSmsPermission() {
+        requestSmsPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.READ_SMS
+            )
+        )
+    }
+
     private fun openAppInfoForRestrictedSettings() {
         val intent = Intent(
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.parse("package:$packageName")
         )
         startActivity(intent)
+    }
+
+    private fun triggerDebitOtpTest() {
+        val sampleSms = "HDFC Bank Alert: OTP is 849201 for debit of INR 25,000.00 from a/c **4021. Do not share OTP with anyone."
+        val analysis = DebitOtpEngine.analyze(sampleSms, "HDFCBK", this)
+        val testIntent = Intent(this, BlockOverlayService::class.java).apply {
+            putExtra(PaymentMonitorService.EXTRA_TARGET_PACKAGE, analysis.bankOrCard ?: "HDFC Bank")
+            putExtra(PaymentMonitorService.EXTRA_TARGET_APP_NAME, "Bank Debit OTP: ${analysis.bankOrCard ?: "HDFC Bank"}")
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TYPE, ThreatType.SUSPICIOUS_DEBIT_OTP.name)
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE, analysis.threatTitle)
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE_HI, analysis.threatTitleHindi)
+            putExtra(
+                PaymentMonitorService.EXTRA_THREAT_DESC,
+                "${analysis.explanation}\n\n• Debiting Amount: ₹25,000.00\n• OTP Code: 849201\n• Source: HDFC Bank (A/c **4021)"
+            )
+            putExtra(PaymentMonitorService.EXTRA_THREAT_DESC_HI, analysis.explanationHindi)
+            putExtra(PaymentMonitorService.EXTRA_DETECTED_KEYWORD, "OTP: 849201 | ₹25,000")
+            putExtra(PaymentMonitorService.EXTRA_FULL_TEXT, sampleSms)
+            putExtra(PaymentMonitorService.EXTRA_ACTION_GUIDE, analysis.actionAdvice)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(testIntent)
+        } else {
+            startService(testIntent)
+        }
     }
 
     private fun triggerTestBlocker() {
@@ -288,6 +340,7 @@ fun SetupScreen(
     hasOverlay: Boolean,
     hasUsageAccess: Boolean,
     hasAccessibility: Boolean,
+    hasSmsAccess: Boolean,
     isDemoMode: Boolean,
     isCallActive: Boolean,
     detectedRemoteApp: RemoteAppInfo?,
@@ -295,12 +348,14 @@ fun SetupScreen(
     onRequestOverlay: () -> Unit,
     onRequestUsageAccess: () -> Unit,
     onRequestAccessibility: () -> Unit,
+    onRequestSmsAccess: () -> Unit,
     onOpenAppInfo: () -> Unit,
     onTestBlocker: () -> Unit,
-    onTestQrBlocker: (String) -> Unit
+    onTestQrBlocker: (String) -> Unit,
+    onTestDebitOtp: () -> Unit
 ) {
     val isSystemProtected = hasOverlay && hasUsageAccess
-    val isFullyGuarded = isSystemProtected && hasAccessibility
+    val isFullyGuarded = isSystemProtected && hasAccessibility && hasSmsAccess
     var selectedQrDemo by remember { mutableStateOf<String?>(null) }
     var qrAnalysis by remember { mutableStateOf<QrThreatAnalysis?>(null) }
 
@@ -325,7 +380,7 @@ fun SetupScreen(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Real-Time Payment & QR Interceptor Sentinel",
+                    text = "Real-Time Payment, QR & Debit OTP Interceptor",
                     color = Color(0xFF38BDF8),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -392,8 +447,8 @@ fun SetupScreen(
                             isFullyGuarded -> if (isDemoMode)
                                 "Demo Mode active: Payment apps will be blocked for testing."
                             else
-                                "Complete Protection: Screen-sharing, calls, and In-App Google Pay / PhonePe QR scans are monitored."
-                            isSystemProtected -> "Calls and screen-sharing are guarded. Enable In-App QR Protection below to also shield internal Google Pay camera scans."
+                                "Complete Protection: Screen-sharing, active calls, In-App QR scans, and bank debit OTPs are all guarded."
+                            isSystemProtected -> "Core protection active. Enable In-App QR and SMS OTP protection below for complete security."
                             else -> "Grant the permissions below to arm background protection."
                         },
                         color = Color(0xFFCBD5E1),
@@ -502,6 +557,16 @@ fun SetupScreen(
                     else
                         "INACTIVE (Enable Permission #3)",
                     isSafe = hasAccessibility
+                )
+
+                SensorRow(
+                    icon = Icons.Default.Sms,
+                    title = "Debit OTP Fraud Shield",
+                    statusText = if (hasSmsAccess)
+                        "ACTIVE (Real-Time Bank SMS Guarded)"
+                    else
+                        "INACTIVE (Enable Permission #4)",
+                    isSafe = hasSmsAccess
                 )
             }
         }
@@ -736,6 +801,15 @@ fun SetupScreen(
             helpNotice = "⚠️ Android 13/14 Notice: If toggle is greyed out / restricted:\n1. Tap 'Step 1: Open App Info' above\n2. Tap the 3 dots (⋮) in top-right corner\n3. Tap 'Allow restricted settings'\n4. Return here and enable 'SurakshaGuard' in Accessibility"
         )
 
+        // Card 4: Debit OTP Fraud Shield (SMS Receiver)
+        PermissionCard(
+            title = "4. Bank Debit OTP Fraud Shield",
+            description = "Monitors incoming SMS for bank debit OTPs (money being deducted). Instantly intercepts unauthorized deductions and phone-call coercion.",
+            isGranted = hasSmsAccess,
+            buttonText = "Grant SMS Detection Permission",
+            onAction = onRequestSmsAccess
+        )
+
         Spacer(modifier = Modifier.height(4.dp))
 
         // Demo Sandbox: Immediate Simulation
@@ -784,6 +858,24 @@ fun SetupScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (hasOverlay) "Launch Shield Overlay Preview" else "Grant Overlay Permission First",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = onTestDebitOtp,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = hasOverlay,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB91C1C)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (hasOverlay) "🧪 Test Debit OTP Alert (₹25,000)" else "Grant Overlay Permission First",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )

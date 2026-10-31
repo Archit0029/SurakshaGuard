@@ -17,6 +17,11 @@
     <!-- Notification permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- SMS permissions for real-time bank debit OTP fraud interception -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
     <!-- Package visibility queries for target UPI apps and remote screen-sharing tools -->
     <queries>
         <!-- Target UPI apps -->
@@ -104,6 +109,16 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Emergency full-screen payment fraud deterrence overlay" />
         </service>
+
+        <!-- Real-Time Bank Debit OTP Sentinel Broadcast Receiver -->
+        <receiver
+            android:name=".SmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 
