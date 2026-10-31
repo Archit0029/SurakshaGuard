@@ -312,6 +312,38 @@ class BlockOverlayService : Service() {
             }
             cardLayout.addView(callGuidanceBox, callLp)
 
+        } else if (threatType == ThreatType.FRAUD_QR_CODE) {
+            // Fraudulent Payment QR Code detected
+            val qrNoticeBox = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#3B090F"))
+                    cornerRadius = dp(10).toFloat()
+                    setStroke(dp(1), Color.parseColor("#EF4444"))
+                }
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+            }
+            val qrNoticeText = TextView(context).apply {
+                text = if (actionGuide.isNotBlank()) {
+                    "🛑 QR Safety Rule: $actionGuide"
+                } else {
+                    "🛑 QR Safety Rule: Never scan a QR code or enter your PIN to receive money. Discard this QR immediately."
+                }
+                textSize = 11.5f
+                setTextColor(Color.parseColor("#FECACA"))
+                setTypeface(typeface, Typeface.BOLD)
+                setLineSpacing(dp(2).toFloat(), 1.15f)
+            }
+            qrNoticeBox.addView(qrNoticeText)
+
+            val qrLp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dp(10)
+            }
+            cardLayout.addView(qrNoticeBox, qrLp)
+
         } else if (threatType == ThreatType.DEMO_MODE) {
             // Demo Mode Notice
             val demoNoticeBox = LinearLayout(context).apply {

@@ -1,0 +1,221 @@
+package com.surakshaguard.app
+
+import android.net.Uri
+
+data class QrThreatAnalysis(
+    val isFraud: Boolean,
+    val riskScore: Int, // 0 to 100
+    val riskLevel: String, // "CRITICAL", "HIGH", "MODERATE", "SAFE"
+    val fraudType: String,
+    val title: String,
+    val titleHindi: String,
+    val explanation: String,
+    val explanationHindi: String,
+    val payeeVpa: String,
+    val payeeName: String,
+    val requestedAmount: String?,
+    val flaggedPatterns: List<String>,
+    val actionAdvice: String
+)
+
+/**
+ * Real-Time UPI QR Code & Deep-Link Threat Intelligence Engine.
+ *
+ * Implements NPCI UPI specification validation, heuristic pattern matching,
+ * and social engineering detection to intercept fraudulent or malicious payment QR codes.
+ */
+object QrThreatEngine {
+
+    // Reverse QR Trap keywords: Scammers send payment QRs claiming victim will "receive" money
+    private val REVERSE_PAYMENT_KEYWORDS = listOf(
+        "refund", "cashback", "reward", "lottery", "win", "winner", "prize",
+        "bonus", "claim", "receive", "credit", "gift", "subsidy", "voucher"
+    )
+
+    // Authority / Utility impersonation keywords
+    private val IMPERSONATION_KEYWORDS = listOf(
+        "electricity", "bijli", "power", "discom", "bses", "uppcl", "tneb", "bescom", "sbpdcl",
+        "customs", "police", "challan", "trai", "court", "cbi", "cyber",
+        "kyc", "pan", "aadhar", "account block", "unblock", "suspended",
+        "customer care", "customercare", "helpline", "support desk", "helpdesk"
+    )
+
+    // Suspicious URL indicators inside the UPI `url` parameter
+    private val SUSPICIOUS_URL_PATTERNS = listOf(
+        "bit.ly", "tinyurl.com", "is.gd", "t.co", "cutt.ly", "rb.gy", "shorturl.at",
+        ".apk", ".exe", ".scr", ".zip", "ngrok", ".xyz", ".top", ".tk"
+    )
+
+    /**
+     * Parses and evaluates a raw UPI URI or QR code string (e.g. upi://pay?pa=...&pn=...)
+     */
+    fun analyze(rawInput: String): QrThreatAnalysis {
+        val cleanInput = rawInput.trim()
+        val params = extractUpiParams(cleanInput)
+
+        val vpa = params["pa"]?.trim() ?: extractVpaFallback(cleanInput)
+        val name = params["pn"]?.trim() ?: "Unknown Payee"
+        val amount = params["am"]?.trim()
+        val note = params["tn"]?.trim() ?: ""
+        val mc = params["mc"]?.trim() ?: "" // Merchant Category Code
+        val urlParam = params["url"]?.trim() ?: ""
+
+        val flaggedReasons = mutableListOf<String>()
+        var score = 0
+        var fraudType = "UNKNOWN"
+
+        val combinedText = "$vpa $name $note".lowercase()
+
+        // 1. Vector: Reverse Payment / "Receive Money" Scam Trap
+        val matchedReverseKeywords = REVERSE_PAYMENT_KEYWORDS.filter { combinedText.contains(it) }
+        if (matchedReverseKeywords.isNotEmpty()) {
+            score += 55
+            fraudType = "REVERSE_QR_SCAM"
+            flaggedReasons.add("Deceptive 'Receive Money / Cashback / Refund' keywords in debit QR: ${matchedReverseKeywords.joinToString(", ")}")
+        }
+
+        // 2. Vector: Utility / Government / Bank Impersonation
+        val matchedImpersonation = IMPERSONATION_KEYWORDS.filter { combinedText.contains(it) }
+        if (matchedImpersonation.isNotEmpty()) {
+            score += 45
+            fraudType = if (fraudType == "UNKNOWN") "IMPERSONATION_SCAM" else fraudType
+            flaggedReasons.add("Impersonating official authority, electricity board, or bank: ${matchedImpersonation.joinToString(", ")}")
+
+            // If claiming to be a utility/bank but missing a legitimate merchant code (e.g., 4900 for utilities)
+            if (mc.isBlank() || mc == "0000") {
+                score += 25
+                flaggedReasons.add("Claims to be utility/government service but uses unverified personal Peer-to-Peer (P2P) VPA (Missing MCC)")
+            }
+        }
+
+        // 3. Vector: Malicious or Shortened URL Parameter in QR
+        if (urlParam.isNotBlank()) {
+            val matchedUrlSuspicion = SUSPICIOUS_URL_PATTERNS.filter { urlParam.lowercase().contains(it) }
+            val isIpAddress = urlParam.matches(Regex(".*://\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}.*"))
+
+            if (matchedUrlSuspicion.isNotEmpty() || isIpAddress) {
+                score += 50
+                fraudType = "MALICIOUS_LINK_QR"
+                flaggedReasons.add("QR code contains hidden shortened URL or direct download link: $urlParam")
+            }
+        }
+
+        // 4. Vector: High-Urgency Static Amount Request
+        if (amount != null && amount.toDoubleOrNull() != null) {
+            val amtVal = amount.toDouble()
+            if (amtVal >= 2000.0 && matchedReverseKeywords.isNotEmpty()) {
+                score += 20
+                flaggedReasons.add("High-value debit request (₹$amtVal) masquerading as reward/refund claim")
+            }
+        }
+
+        // Normalize score between 0 and 100
+        val finalScore = score.coerceIn(0, 100)
+        val isFraud = finalScore >= 50
+
+        val riskLevel = when {
+            finalScore >= 75 -> "CRITICAL"
+            finalScore >= 50 -> "HIGH"
+            finalScore >= 25 -> "MODERATE"
+            else -> "SAFE"
+        }
+
+        // Generate tailored explanations
+        val title: String
+        val titleHindi: String
+        val explanation: String
+        val explanationHindi: String
+        val advice: String
+
+        when (fraudType) {
+            "REVERSE_QR_SCAM" -> {
+                title = "CRITICAL ALERT: Fake 'Receive Money' QR Trap"
+                titleHindi = "गंभीर चेतावनी: फर्जी 'पैसे पाने वाला' क्यूआर जाल"
+                explanation = "This QR code is engineered to DEBIT (deduct) ${if (amount != null) "₹$amount" else "money"} from YOUR account. In UPI, scanning a QR code is ONLY for paying money, NEVER for receiving money or claiming refunds."
+                explanationHindi = "यह क्यूआर कोड आपके खाते से पैसे काटने (Debit) के लिए बनाया गया है! यूपीआई में किसी से पैसे प्राप्त करने या रिफंड लेने के लिए कभी भी क्यूआर स्कैन या यूपीआई पिन डालने की जरूरत नहीं होती।"
+                advice = "Do NOT enter your UPI PIN. Discard this QR immediately."
+            }
+            "IMPERSONATION_SCAM" -> {
+                title = "HIGH THREAT: Impersonation / Fake Utility QR"
+                titleHindi = "खतरे की चेतावनी: फर्जी बिजली बिल या बैंक खाता क्यूआर"
+                explanation = "This QR code claims to belong to '$name' but routes funds to a personal, unverified VPA ($vpa). Legitimate utility boards and banks use verified enterprise merchant accounts."
+                explanationHindi = "यह क्यूआर कोड '$name' का होने का दावा करता है, लेकिन यह पैसे सीधे एक अज्ञात निजी खाते ($vpa) में भेज रहा है। यह एक फर्जी बिजली बिल या फर्जी बैंक जालसाजी है।"
+                advice = "Pay only through official biller portals or electricity provider apps."
+            }
+            "MALICIOUS_LINK_QR" -> {
+                title = "HIGH THREAT: QR Contains Malicious URL"
+                titleHindi = "खतरे की चेतावनी: क्यूआर में संदिग्ध लिंक पाया गया"
+                explanation = "This QR code contains an external redirect link ($urlParam) associated with malicious APK downloads or phishing portals."
+                explanationHindi = "इस क्यूआर कोड में एक छिपा हुआ लिंक है जो आपके फोन में संदिग्ध ऐप डाउनलोड करवा सकता है।"
+                advice = "Do not open any link and do not authorize this payment."
+            }
+            else -> {
+                if (isFraud) {
+                    title = "SECURITY ALERT: Suspicious Payment QR"
+                    titleHindi = "सुरक्षा चेतावनी: संदिग्ध पेमेंट क्यूआर"
+                    explanation = "Suraksha Guard identified high-risk social engineering markers associated with known payment fraud in this QR code."
+                    explanationHindi = "सुरक्षागार्ड ने इस क्यूआर कोड में वित्तीय धोखाधड़ी से जुड़े संदिग्ध लक्षण पाए हैं।"
+                    advice = "Verify the merchant in person before approving."
+                } else {
+                    title = "SAFE: Verified Payment QR"
+                    titleHindi = "सुरक्षित: वैध पेमेंट क्यूआर"
+                    explanation = "No fraudulent patterns or impersonation markers detected in this UPI QR code."
+                    explanationHindi = "इस क्यूआर कोड में कोई धोखाधड़ी या संदिग्ध पैटर्न नहीं पाया गया।"
+                    advice = "Safe to proceed with normal payment."
+                }
+            }
+        }
+
+        return QrThreatAnalysis(
+            isFraud = isFraud,
+            riskScore = finalScore,
+            riskLevel = riskLevel,
+            fraudType = fraudType,
+            title = title,
+            titleHindi = titleHindi,
+            explanation = explanation,
+            explanationHindi = explanationHindi,
+            payeeVpa = if (vpa.isNotBlank()) vpa else "unspecified@vpa",
+            payeeName = name,
+            requestedAmount = amount,
+            flaggedPatterns = flaggedReasons,
+            actionAdvice = advice
+        )
+    }
+
+    /**
+     * Extracts parameters from standard UPI URIs: upi://pay?pa=...&pn=...&am=...
+     * Uses pure URL decoding for 100% compatibility across both JVM and Android runtimes.
+     */
+    fun extractUpiParams(uriString: String): Map<String, String> {
+        val params = mutableMapOf<String, String>()
+        try {
+            val queryPart = if (uriString.contains("?")) uriString.substringAfter("?") else uriString
+            val pairs = queryPart.split("&")
+            for (pair in pairs) {
+                val tokens = pair.split("=")
+                if (tokens.size >= 2) {
+                    val key = tokens[0].trim()
+                    val rawVal = tokens.subList(1, tokens.size).joinToString("=")
+                    val decodedVal = try {
+                        java.net.URLDecoder.decode(rawVal, "UTF-8")
+                    } catch (_: Exception) {
+                        rawVal
+                    }
+                    params[key] = decodedVal
+                }
+            }
+        } catch (_: Exception) {
+            // Graceful parse fallback
+        }
+        return params
+    }
+
+    private fun extractVpaFallback(input: String): String {
+        // Match standard VPA format: username@bankhandle
+        val regex = Regex("[a-zA-Z0-9.\\-_]{2,50}@[a-zA-Z]{2,20}")
+        val match = regex.find(input)
+        return match?.value ?: ""
+    }
+}
+

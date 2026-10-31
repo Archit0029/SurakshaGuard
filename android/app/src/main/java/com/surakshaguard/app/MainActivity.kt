@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -48,6 +49,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,13 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 
 /**
- * SurakshaGuard Setup & Permission Onboarding Activity.
- *
- * Provides a clean Jetpack Compose interface allowing users to:
- * 1. Grant Overlay Permission (Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
- * 2. Grant Usage Access Sentinel (Settings.ACTION_USAGE_ACCESS_SETTINGS)
- * 3. Toggle between "Live Threat Protection" (Default) and "Demo Simulation Mode"
- * 4. Monitor live threat detection sensors in real time.
+ * Suraksha Guard Setup, Monitoring & QR Phishing Interceptor Activity.
  */
 class MainActivity : ComponentActivity() {
 
@@ -106,7 +102,8 @@ class MainActivity : ComponentActivity() {
                         },
                         onRequestOverlay = { requestOverlayPermission() },
                         onRequestUsageAccess = { requestUsageAccessPermission() },
-                        onTestBlocker = { triggerTestBlocker() }
+                        onTestBlocker = { triggerTestBlocker() },
+                        onTestQrBlocker = { sampleQr -> triggerQrBlockerTest(sampleQr) }
                     )
                 }
             }
@@ -178,16 +175,39 @@ class MainActivity : ComponentActivity() {
             )
             putExtra(
                 PaymentMonitorService.EXTRA_THREAT_DESC,
-                "This is a demonstration of SurakshaGuard's real-time interception shield. In live mode, it only blocks if an active phone call or screen-sharing application is detected."
+                "This is a demonstration of Suraksha Guard's real-time interception shield. In live mode, it only blocks if an active phone call, screen-sharing application, or fraudulent payment QR is detected."
             )
             putExtra(
                 PaymentMonitorService.EXTRA_THREAT_DESC_HI,
-                "यह सुरक्षागार्ड के सुरक्षा शील्ड का लाइव परीक्षण है। सामान्य उपयोग में यह केवल फोन कॉल या स्क्रीन शेयरिंग चालू होने पर ही रोकता है।"
+                "यह सुरक्षा गार्ड के सुरक्षा शील्ड का लाइव परीक्षण है। सामान्य उपयोग में यह केवल फोन कॉल, स्क्रीन शेयरिंग या फर्जी क्यूआर पाए जाने पर ही रोकता है।"
             )
             putExtra(
                 PaymentMonitorService.EXTRA_ACTION_GUIDE,
                 "Test successful. Use 'I am Safe' or 'Dismiss' to close."
             )
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(testIntent)
+        } else {
+            startService(testIntent)
+        }
+    }
+
+    private fun triggerQrBlockerTest(sampleQr: String) {
+        val analysis = QrThreatEngine.analyze(sampleQr)
+        val testIntent = Intent(this, BlockOverlayService::class.java).apply {
+            putExtra(PaymentMonitorService.EXTRA_TARGET_PACKAGE, "Scanned UPI QR Code")
+            putExtra(PaymentMonitorService.EXTRA_TARGET_APP_NAME, "Scanned QR: ${analysis.payeeName}")
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TYPE, ThreatType.FRAUD_QR_CODE.name)
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE, analysis.title)
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE_HI, analysis.titleHindi)
+            putExtra(
+                PaymentMonitorService.EXTRA_THREAT_DESC,
+                "${analysis.explanation}\n\n• Payee VPA: ${analysis.payeeVpa}\n• Requested Amount: ${if (analysis.requestedAmount != null) "₹" + analysis.requestedAmount else "Variable"}"
+            )
+            putExtra(PaymentMonitorService.EXTRA_THREAT_DESC_HI, analysis.explanationHindi)
+            putExtra(PaymentMonitorService.EXTRA_OFFENDING_APP_NAME, analysis.payeeVpa)
+            putExtra(PaymentMonitorService.EXTRA_ACTION_GUIDE, analysis.actionAdvice)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(testIntent)
@@ -237,9 +257,12 @@ fun SetupScreen(
     onToggleDemoMode: (Boolean) -> Unit,
     onRequestOverlay: () -> Unit,
     onRequestUsageAccess: () -> Unit,
-    onTestBlocker: () -> Unit
+    onTestBlocker: () -> Unit,
+    onTestQrBlocker: (String) -> Unit
 ) {
     val isSystemProtected = hasOverlay && hasUsageAccess
+    var selectedQrDemo by remember { mutableStateOf<String?>(null) }
+    var qrAnalysis by remember { mutableStateOf<QrThreatAnalysis?>(null) }
 
     Column(
         modifier = Modifier
@@ -262,7 +285,7 @@ fun SetupScreen(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Real-Time Payment Interceptor Sentinel",
+                    text = "Real-Time Payment & QR Interceptor Sentinel",
                     color = Color(0xFF38BDF8),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -321,7 +344,7 @@ fun SetupScreen(
                             if (isDemoMode)
                                 "Demo Mode active: Payment apps will be blocked for testing."
                             else
-                                "Live Protection: Payments are shielded against active calls & screen sharing."
+                                "Live Protection: Payments are shielded against active calls, screen-sharing & fraud QRs."
                         else
                             "Grant the two permissions below to arm background protection.",
                         color = Color(0xFFCBD5E1),
@@ -363,7 +386,7 @@ fun SetupScreen(
                             text = if (isDemoMode)
                                 "Always blocks payments when Google Pay/Paytm is opened (for hackathon demo)."
                             else
-                                "Only blocks when an active call or screen-sharing app is detected. Safe payments pass smoothly.",
+                                "Only blocks when an active call, screen share, or fraud QR is detected. Safe payments pass smoothly.",
                             color = Color(0xFF94A3B8),
                             fontSize = 11.sp,
                             lineHeight = 15.sp,
@@ -421,6 +444,205 @@ fun SetupScreen(
                         "NO REMOTE TOOLS (SAFE)",
                     isSafe = detectedRemoteApp == null
                 )
+
+                SensorRow(
+                    icon = Icons.Default.QrCodeScanner,
+                    title = "Scanned Payment QR Sentinel",
+                    statusText = "ARMED (Deep-Link Interceptor Active)",
+                    isSafe = true
+                )
+            }
+        }
+
+        // ── QR Code Fraud & Phishing Interceptor Showcase ──
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF0284C7), RoundedCornerShape(16.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1928)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner,
+                        contentDescription = null,
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "QR CODE PHISHING & FRAUD DETECTOR",
+                        color = Color(0xFF38BDF8),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Text(
+                    text = "Suraksha Guard intercepts UPI deep-links whenever a QR is scanned. Test common Indian QR scams below:",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
+                )
+
+                // Quick Preset Buttons for Testing Scam QRs
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val qr = "upi://pay?pa=fake-bses-power@ybl&pn=BSES%20Electricity%20Discom&am=4999&cu=INR"
+                            selectedQrDemo = qr
+                            qrAnalysis = QrThreatEngine.analyze(qr)
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B090F)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) {
+                        Text(text = "⚡ Fake Electricity QR", fontSize = 10.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            val qr = "upi://pay?pa=scam-rewards99@paytm&pn=GooglePay%20Cashback%20Reward&am=2500&cu=INR&tn=Claim%20Cashback"
+                            selectedQrDemo = qr
+                            qrAnalysis = QrThreatEngine.analyze(qr)
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B090F)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) {
+                        Text(text = "🎁 'Cashback' Trap QR", fontSize = 10.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val qr = "upi://pay?pa=customs-help@okaxis&pn=Customs%20Clearance&am=12000&url=http://bit.ly/fake-customs-apk"
+                            selectedQrDemo = qr
+                            qrAnalysis = QrThreatEngine.analyze(qr)
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B090F)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) {
+                        Text(text = "🔗 Malicious Link QR", fontSize = 10.sp, color = Color(0xFFFECACA), fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            val qr = "upi://pay?pa=kirana-store@icici&pn=Sharma%20Kirana%20Store&mc=5411&am=250&cu=INR"
+                            selectedQrDemo = qr
+                            qrAnalysis = QrThreatEngine.analyze(qr)
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF063628)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    ) {
+                        Text(text = "✅ Clean Grocery QR", fontSize = 10.sp, color = Color(0xFFA7F3D0), fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Display Live Analysis Result
+                if (qrAnalysis != null) {
+                    val analysis = qrAnalysis!!
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                1.dp,
+                                if (analysis.isFraud) Color(0xFFEF4444) else Color(0xFF10B981),
+                                RoundedCornerShape(12.dp)
+                            ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (analysis.isFraud) Color(0xFF1F0609) else Color(0xFF041C15)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (analysis.isFraud) "🚨 FRAUD QR DETECTED" else "✅ VERIFIED SAFE QR",
+                                    color = if (analysis.isFraud) Color(0xFFEF4444) else Color(0xFF34D399),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (analysis.isFraud) Color(0xFFDC2626) else Color(0xFF059669))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "Risk: ${analysis.riskScore}/100",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = analysis.title,
+                                color = Color.White,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Text(
+                                text = "• Payee: ${analysis.payeeName} (${analysis.payeeVpa})\n• Amount: ${if (analysis.requestedAmount != null) "₹" + analysis.requestedAmount else "Variable"}",
+                                color = Color(0xFFCBD5E1),
+                                fontSize = 10.5.sp,
+                                lineHeight = 14.sp
+                            )
+
+                            Text(
+                                text = analysis.explanation,
+                                color = Color(0xFF94A3B8),
+                                fontSize = 10.sp,
+                                lineHeight = 13.sp
+                            )
+
+                            if (analysis.isFraud) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Button(
+                                    onClick = { onTestQrBlocker(selectedQrDemo!!) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "Simulate Full Blocker for this Fraud QR",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

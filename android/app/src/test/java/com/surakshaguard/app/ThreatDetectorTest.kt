@@ -109,6 +109,48 @@ class ThreatDetectorTest {
     }
 
     @Test
+    fun testQr_ReversePaymentScam_flagsFraud() {
+        val scamQr = "upi://pay?pa=scammer-lucky@paytm&pn=GooglePay%20Cashback%20Reward&am=2500&cu=INR&tn=Claim%20Cashback"
+        val analysis = QrThreatEngine.analyze(scamQr)
+
+        assertTrue("Reverse payment QR must be flagged as fraud", analysis.isFraud)
+        assertEquals("REVERSE_QR_SCAM", analysis.fraudType)
+        assertTrue(analysis.riskScore >= 50)
+        assertTrue(analysis.title.contains("Fake 'Receive Money' QR Trap"))
+    }
+
+    @Test
+    fun testQr_ImpersonationElectricityBill_flagsFraud() {
+        val scamQr = "upi://pay?pa=bses-power-bill@ybl&pn=BSES%20Electricity%20Discom&am=4999&cu=INR"
+        val analysis = QrThreatEngine.analyze(scamQr)
+
+        assertTrue("Fake electricity QR must be flagged as fraud", analysis.isFraud)
+        assertEquals("IMPERSONATION_SCAM", analysis.fraudType)
+        assertTrue(analysis.riskScore >= 50)
+        assertTrue(analysis.title.contains("Impersonation"))
+    }
+
+    @Test
+    fun testQr_MaliciousUrlInQr_flagsFraud() {
+        val scamQr = "upi://pay?pa=customs-help@okaxis&pn=Customs%20Clearance&am=12000&url=http://bit.ly/fake-customs-apk"
+        val analysis = QrThreatEngine.analyze(scamQr)
+
+        assertTrue("Malicious URL in QR must be flagged as fraud", analysis.isFraud)
+        assertEquals("MALICIOUS_LINK_QR", analysis.fraudType)
+        assertTrue(analysis.riskScore >= 50)
+    }
+
+    @Test
+    fun testQr_CleanLegitimateMerchant_passesAsSafe() {
+        val cleanQr = "upi://pay?pa=kirana-store@icici&pn=Sharma%20Kirana%20Store&mc=5411&am=250&cu=INR"
+        val analysis = QrThreatEngine.analyze(cleanQr)
+
+        assertFalse("Clean merchant QR must NOT be flagged as fraud", analysis.isFraud)
+        assertEquals("SAFE", analysis.riskLevel)
+        assertTrue(analysis.riskScore < 30)
+    }
+
+    @Test
     fun testMultiplePermutations_cleanStateAlwaysPasses() {
         // Run clean check 100 times to guarantee consistency
         for (i in 1..100) {

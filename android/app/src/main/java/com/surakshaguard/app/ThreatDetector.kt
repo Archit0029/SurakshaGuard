@@ -15,6 +15,7 @@ enum class ThreatType {
     NONE,
     REMOTE_SCREEN_SHARE,
     ACTIVE_PHONE_CALL,
+    FRAUD_QR_CODE,
     DEMO_MODE
 }
 
