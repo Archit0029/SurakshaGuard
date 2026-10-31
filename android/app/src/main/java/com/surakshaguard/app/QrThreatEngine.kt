@@ -1,7 +1,5 @@
 package com.surakshaguard.app
 
-import android.net.Uri
-
 data class QrThreatAnalysis(
     val isFraud: Boolean,
     val riskScore: Int, // 0 to 100
@@ -22,7 +20,8 @@ data class QrThreatAnalysis(
  * Real-Time UPI QR Code & Deep-Link Threat Intelligence Engine.
  *
  * Implements NPCI UPI specification validation, heuristic pattern matching,
- * and social engineering detection to intercept fraudulent or malicious payment QR codes.
+ * and social engineering detection to intercept fraudulent or malicious payment QR codes
+ * scanned externally or directly inside payment apps (Google Pay, PhonePe, Paytm).
  */
 object QrThreatEngine {
 
@@ -184,6 +183,138 @@ object QrThreatEngine {
     }
 
     /**
+     * Inspects text extracted from active payment app window (e.g. Google Pay, PhonePe, Paytm).
+     * Detects when a user has scanned a fraudulent QR inside Google Pay and is on the checkout screen.
+     */
+    fun analyzeScreenText(screenText: String): QrThreatAnalysis {
+        val lowerText = screenText.lowercase()
+        val vpa = extractVpaFallback(screenText)
+        val amount = extractAmountFallback(screenText)
+        val payeeName = extractPayeeNameFallback(screenText, vpa)
+
+        val flaggedReasons = mutableListOf<String>()
+        var score = 0
+        var fraudType = "UNKNOWN"
+
+        // 1. Vector: Reverse Payment / Cashback / Refund scam inside Google Pay
+        val matchedReverseKeywords = REVERSE_PAYMENT_KEYWORDS.filter { lowerText.contains(it) }
+        if (matchedReverseKeywords.isNotEmpty()) {
+            score += 60
+            fraudType = "REVERSE_QR_SCAM"
+            flaggedReasons.add("Deceptive 'Cashback / Refund / Prize' keywords on payment screen: ${matchedReverseKeywords.joinToString(", ")}")
+        }
+
+        // 2. Vector: Fake Electricity / Utility Impersonation
+        val matchedImpersonation = IMPERSONATION_KEYWORDS.filter { lowerText.contains(it) }
+        if (matchedImpersonation.isNotEmpty()) {
+            score += 50
+            fraudType = if (fraudType == "UNKNOWN") "IMPERSONATION_SCAM" else fraudType
+            flaggedReasons.add("Impersonating utility/authority on payment screen: ${matchedImpersonation.joinToString(", ")}")
+
+            // If VPA is present and ends with standard personal P2P handles (okaxis, okhdfcbank, ybl, paytm)
+            if (vpa.isNotBlank() && isPersonalVpaHandle(vpa)) {
+                score += 30
+                flaggedReasons.add("Utility payment routed to unverified personal VPA handle: $vpa")
+            }
+        }
+
+        // 3. Vector: Suspicious high-risk URL or APK references in payment notes
+        val matchedUrl = SUSPICIOUS_URL_PATTERNS.filter { lowerText.contains(it) }
+        if (matchedUrl.isNotEmpty()) {
+            score += 50
+            fraudType = "MALICIOUS_LINK_QR"
+            flaggedReasons.add("Suspicious external link or APK reference detected on payment screen")
+        }
+
+        val finalScore = score.coerceIn(0, 100)
+        val isFraud = finalScore >= 50
+
+        val riskLevel = when {
+            finalScore >= 75 -> "CRITICAL"
+            finalScore >= 50 -> "HIGH"
+            finalScore >= 25 -> "MODERATE"
+            else -> "SAFE"
+        }
+
+        val title: String
+        val titleHindi: String
+        val explanation: String
+        val explanationHindi: String
+        val advice: String
+
+        when (fraudType) {
+            "REVERSE_QR_SCAM" -> {
+                title = "CRITICAL ALERT: Fake 'Receive Money' QR Trap in Payment App"
+                titleHindi = "गंभीर धोखाधड़ी: फर्जी 'कैशबैक / रिफंड' पेमेंट जाल"
+                explanation = "You scanned a QR code offering a refund or reward, but your payment app is preparing to DEBIT ${if (amount != null) "₹$amount" else "money"} from YOUR account. Entering your UPI PIN will send money to the scammer."
+                explanationHindi = "आपने जो क्यूआर स्कैन किया है वह आपके खाते से पैसे काटने (Debit) के लिए बना है! यूपीआई में पैसे प्राप्त करने या कैशबैक लेने के लिए कभी भी पिन डालने की जरूरत नहीं होती।"
+                advice = "Do NOT enter your UPI PIN. Cancel this transaction immediately."
+            }
+            "IMPERSONATION_SCAM" -> {
+                title = "HIGH THREAT: Fake Utility / Electricity Bill QR"
+                titleHindi = "खतरे की चेतावनी: फर्जी बिजली बिल या बैंक खाता क्यूआर"
+                explanation = "This payment is labeled as a utility or bill payment, but points to an individual private account (${if (vpa.isNotBlank()) vpa else "unverified person"}). Fraudsters use fake electricity QR codes to steal bill payments."
+                explanationHindi = "यह पेमेंट किसी बिजली विभाग के नाम पर दिख रहा है, लेकिन पैसे एक अज्ञात निजी खाते में जा रहे हैं। यह एक फर्जी बिजली बिल पेमेंट जालसाजी है।"
+                advice = "Pay electricity and utility bills only through verified official portals or discom apps."
+            }
+            else -> {
+                if (isFraud) {
+                    title = "SECURITY ALERT: Suspicious Scanned QR Detected"
+                    titleHindi = "सुरक्षा चेतावनी: संदिग्ध स्कैन किया गया क्यूआर"
+                    explanation = "Suraksha Guard detected deceptive patterns in the payment details on your screen."
+                    explanationHindi = "सुरक्षागार्ड ने आपके स्क्रीन पर दिख रहे पेमेंट विवरण में वित्तीय धोखाधड़ी के लक्षण पाए हैं।"
+                    advice = "Verify the merchant before proceeding."
+                } else {
+                    title = "SAFE: Legitimate Transaction"
+                    titleHindi = "सुरक्षित: वैध पेमेंट"
+                    explanation = "No suspicious scam patterns detected on this payment screen."
+                    explanationHindi = "इस पेमेंट स्क्रीन पर कोई धोखाधड़ी के लक्षण नहीं पाए गए।"
+                    advice = "Safe to proceed."
+                }
+            }
+        }
+
+        return QrThreatAnalysis(
+            isFraud = isFraud,
+            riskScore = finalScore,
+            riskLevel = riskLevel,
+            fraudType = fraudType,
+            title = title,
+            titleHindi = titleHindi,
+            explanation = explanation,
+            explanationHindi = explanationHindi,
+            payeeVpa = if (vpa.isNotBlank()) vpa else "Detected On Screen",
+            payeeName = if (payeeName.isNotBlank()) payeeName else "Unknown Payee",
+            requestedAmount = amount,
+            flaggedPatterns = flaggedReasons,
+            actionAdvice = advice
+        )
+    }
+
+    private fun isPersonalVpaHandle(vpa: String): Boolean {
+        val handle = vpa.substringAfter("@", "").lowercase()
+        return handle in listOf("okaxis", "okhdfcbank", "okicici", "oksbi", "ybl", "ibl", "axl", "paytm", "apl")
+    }
+
+    private fun extractAmountFallback(text: String): String? {
+        val regex = Regex("(?:₹|INR|Rs\\.?)\\s*([\\d,]+(?:\\.\\d{1,2})?)")
+        val match = regex.find(text)
+        return match?.groupValues?.getOrNull(1)?.replace(",", "")
+    }
+
+    private fun extractPayeeNameFallback(text: String, vpa: String): String {
+        val payingRegex = Regex("(?:paying|to)\\s+([a-zA-Z0-9\\s]{3,30})", RegexOption.IGNORE_CASE)
+        val match = payingRegex.find(text)
+        if (match != null) {
+            return match.groupValues[1].trim()
+        }
+        if (vpa.isNotBlank()) {
+            return vpa.substringBefore("@")
+        }
+        return "Unknown Payee"
+    }
+
+    /**
      * Extracts parameters from standard UPI URIs: upi://pay?pa=...&pn=...&am=...
      * Uses pure URL decoding for 100% compatibility across both JVM and Android runtimes.
      */
@@ -211,11 +342,10 @@ object QrThreatEngine {
         return params
     }
 
-    private fun extractVpaFallback(input: String): String {
+    fun extractVpaFallback(input: String): String {
         // Match standard VPA format: username@bankhandle
         val regex = Regex("[a-zA-Z0-9.\\-_]{2,50}@[a-zA-Z]{2,20}")
         val match = regex.find(input)
         return match?.value ?: ""
     }
 }
-

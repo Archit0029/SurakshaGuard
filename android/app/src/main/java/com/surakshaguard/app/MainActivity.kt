@@ -1,12 +1,14 @@
 package com.surakshaguard.app
 
 import android.app.AppOpsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.TextUtils
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -68,6 +70,7 @@ class MainActivity : ComponentActivity() {
 
     private var hasOverlayPermission by mutableStateOf(false)
     private var hasUsagePermission by mutableStateOf(false)
+    private var hasAccessibilityPermission by mutableStateOf(false)
     private var isDemoMode by mutableStateOf(false)
     private var isCallActive by mutableStateOf(false)
     private var detectedRemoteApp by mutableStateOf<RemoteAppInfo?>(null)
@@ -93,6 +96,7 @@ class MainActivity : ComponentActivity() {
                     SetupScreen(
                         hasOverlay = hasOverlayPermission,
                         hasUsageAccess = hasUsagePermission,
+                        hasAccessibility = hasAccessibilityPermission,
                         isDemoMode = isDemoMode,
                         isCallActive = isCallActive,
                         detectedRemoteApp = detectedRemoteApp,
@@ -102,6 +106,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onRequestOverlay = { requestOverlayPermission() },
                         onRequestUsageAccess = { requestUsageAccessPermission() },
+                        onRequestAccessibility = { requestAccessibilityPermission() },
                         onTestBlocker = { triggerTestBlocker() },
                         onTestQrBlocker = { sampleQr -> triggerQrBlockerTest(sampleQr) }
                     )
@@ -130,6 +135,7 @@ class MainActivity : ComponentActivity() {
     private fun updatePermissionStates() {
         hasOverlayPermission = isOverlayPermissionGranted(this)
         hasUsagePermission = isUsageAccessGranted(this)
+        hasAccessibilityPermission = isAccessibilityServiceEnabled(this)
         isCallActive = ThreatDetector.checkActivePhoneCall(this)
         detectedRemoteApp = ThreatDetector.checkActiveRemoteApp(this)
     }
@@ -157,6 +163,11 @@ class MainActivity : ComponentActivity() {
 
     private fun requestUsageAccessPermission() {
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        startActivity(intent)
+    }
+
+    private fun requestAccessibilityPermission() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         startActivity(intent)
     }
 
@@ -244,6 +255,24 @@ class MainActivity : ComponentActivity() {
             }
             return mode == AppOpsManager.MODE_ALLOWED
         }
+
+        fun isAccessibilityServiceEnabled(context: Context): Boolean {
+            if (SurakshaAccessibilityService.isRunning) return true
+            val expectedComponentName = ComponentName(context, SurakshaAccessibilityService::class.java).flattenToString()
+            val enabledServices = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+            val colonSplitter = TextUtils.SimpleStringSplitter(':')
+            colonSplitter.setString(enabledServices)
+            while (colonSplitter.hasNext()) {
+                val componentName = colonSplitter.next()
+                if (componentName.equals(expectedComponentName, ignoreCase = true)) {
+                    return true
+                }
+            }
+            return false
+        }
     }
 }
 
@@ -251,16 +280,19 @@ class MainActivity : ComponentActivity() {
 fun SetupScreen(
     hasOverlay: Boolean,
     hasUsageAccess: Boolean,
+    hasAccessibility: Boolean,
     isDemoMode: Boolean,
     isCallActive: Boolean,
     detectedRemoteApp: RemoteAppInfo?,
     onToggleDemoMode: (Boolean) -> Unit,
     onRequestOverlay: () -> Unit,
     onRequestUsageAccess: () -> Unit,
+    onRequestAccessibility: () -> Unit,
     onTestBlocker: () -> Unit,
     onTestQrBlocker: (String) -> Unit
 ) {
     val isSystemProtected = hasOverlay && hasUsageAccess
+    val isFullyGuarded = isSystemProtected && hasAccessibility
     var selectedQrDemo by remember { mutableStateOf<String?>(null) }
     var qrAnalysis by remember { mutableStateOf<QrThreatAnalysis?>(null) }
 
@@ -295,7 +327,7 @@ fun SetupScreen(
             Icon(
                 imageVector = Icons.Default.Security,
                 contentDescription = null,
-                tint = if (isSystemProtected) Color(0xFF10B981) else Color(0xFFF59E0B),
+                tint = if (isFullyGuarded) Color(0xFF10B981) else if (isSystemProtected) Color(0xFF38BDF8) else Color(0xFFF59E0B),
                 modifier = Modifier.size(36.dp)
             )
         }
@@ -308,11 +340,11 @@ fun SetupScreen(
                 .fillMaxWidth()
                 .border(
                     1.dp,
-                    if (isSystemProtected) Color(0xFF059669) else Color(0xFFD97706),
+                    if (isFullyGuarded) Color(0xFF059669) else if (isSystemProtected) Color(0xFF0284C7) else Color(0xFFD97706),
                     RoundedCornerShape(16.dp)
                 ),
             colors = CardDefaults.cardColors(
-                containerColor = if (isSystemProtected) Color(0xFF06281E) else Color(0xFF2E1B05)
+                containerColor = if (isFullyGuarded) Color(0xFF06281E) else if (isSystemProtected) Color(0xFF0B1E2E) else Color(0xFF2E1B05)
             ),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -323,9 +355,9 @@ fun SetupScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (isSystemProtected) Icons.Default.CheckCircle else Icons.Default.Warning,
+                    imageVector = if (isFullyGuarded) Icons.Default.CheckCircle else if (isSystemProtected) Icons.Default.Security else Icons.Default.Warning,
                     contentDescription = null,
-                    tint = if (isSystemProtected) Color(0xFF34D399) else Color(0xFFFBBF24),
+                    tint = if (isFullyGuarded) Color(0xFF34D399) else if (isSystemProtected) Color(0xFF38BDF8) else Color(0xFFFBBF24),
                     modifier = Modifier.size(32.dp)
                 )
 
@@ -333,20 +365,29 @@ fun SetupScreen(
 
                 Column {
                     Text(
-                        text = if (isSystemProtected) "SYSTEM ARMED & ACTIVE" else "SETUP REQUIRED",
-                        color = if (isSystemProtected) Color(0xFF34D399) else Color(0xFFFBBF24),
+                        text = when {
+                            isFullyGuarded -> "100% COMPLETE PROTECTION ARMED"
+                            isSystemProtected -> "CORE PROTECTION ARMED"
+                            else -> "SETUP REQUIRED"
+                        },
+                        color = when {
+                            isFullyGuarded -> Color(0xFF34D399)
+                            isSystemProtected -> Color(0xFF38BDF8)
+                            else -> Color(0xFFFBBF24)
+                        },
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
                     )
                     Text(
-                        text = if (isSystemProtected)
-                            if (isDemoMode)
+                        text = when {
+                            isFullyGuarded -> if (isDemoMode)
                                 "Demo Mode active: Payment apps will be blocked for testing."
                             else
-                                "Live Protection: Payments are shielded against active calls, screen-sharing & fraud QRs."
-                        else
-                            "Grant the two permissions below to arm background protection.",
+                                "Complete Protection: Screen-sharing, calls, and In-App Google Pay / PhonePe QR scans are monitored."
+                            isSystemProtected -> "Calls and screen-sharing are guarded. Enable In-App QR Protection below to also shield internal Google Pay camera scans."
+                            else -> "Grant the permissions below to arm background protection."
+                        },
                         color = Color(0xFFCBD5E1),
                         fontSize = 11.sp,
                         lineHeight = 15.sp
@@ -447,9 +488,12 @@ fun SetupScreen(
 
                 SensorRow(
                     icon = Icons.Default.QrCodeScanner,
-                    title = "Scanned Payment QR Sentinel",
-                    statusText = "ARMED (Deep-Link Interceptor Active)",
-                    isSafe = true
+                    title = "In-App Payment QR Sentinel",
+                    statusText = if (hasAccessibility)
+                        "ACTIVE (Google Pay / PhonePe Shielded)"
+                    else
+                        "INACTIVE (Enable Permission #3)",
+                    isSafe = hasAccessibility
                 )
             }
         }
@@ -670,6 +714,15 @@ fun SetupScreen(
             isGranted = hasUsageAccess,
             buttonText = "Enable Usage Access",
             onAction = onRequestUsageAccess
+        )
+
+        // Card 3: In-App QR Protection (Accessibility Service)
+        PermissionCard(
+            title = "3. In-App QR Protection (Google Pay / PhonePe)",
+            description = "Crucial for detecting fraud when scanning QRs inside Google Pay, PhonePe, or Paytm camera. Automatically inspects payee details and halts transactions if a scam is detected before you enter your UPI PIN.",
+            isGranted = hasAccessibility,
+            buttonText = "Enable In-App QR Protection",
+            onAction = onRequestAccessibility
         )
 
         Spacer(modifier = Modifier.height(4.dp))

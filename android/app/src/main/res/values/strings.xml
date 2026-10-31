@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">Suraksha Guard</string>
-    <string name="accessibility_service_label">Suraksha Guard Payment Monitor</string>
-    <string name="accessibility_service_description">Monitors when payment apps (Google Pay, PhonePe, Paytm, BHIM, CRED) open to physically block unauthorized or coerced transactions in suspicious environments.</string>
+    <string name="accessibility_service_label">Suraksha Guard QR &amp; Payment Protector</string>
+    <string name="accessibility_service_description">Protects against fraud by detecting fake QR codes, reverse payment traps, and fraudulent utility bills scanned directly inside Google Pay, PhonePe, or Paytm.</string>
 </resources>

@@ -151,6 +151,38 @@ class ThreatDetectorTest {
     }
 
     @Test
+    fun testScreenText_GPayReversePaymentCashbackScam_flagsFraud() {
+        val gpayScreenText = "Paying GooglePay Cashback Reward scam@paytm ₹2,500.00 Claim Cashback and Receive Money to Bank"
+        val analysis = QrThreatEngine.analyzeScreenText(gpayScreenText)
+
+        assertTrue("In-app cashback scam screen text must be flagged as fraud", analysis.isFraud)
+        assertEquals("REVERSE_QR_SCAM", analysis.fraudType)
+        assertTrue(analysis.riskScore >= 50)
+        assertTrue(analysis.title.contains("Fake 'Receive Money' QR Trap"))
+    }
+
+    @Test
+    fun testScreenText_GPayFakeElectricityDiscom_flagsFraud() {
+        val gpayScreenText = "Paying BSES Electricity Discom fake-bill@ybl ₹4,999.00 Electricity Bill Due"
+        val analysis = QrThreatEngine.analyzeScreenText(gpayScreenText)
+
+        assertTrue("In-app fake electricity discom screen text must be flagged as fraud", analysis.isFraud)
+        assertEquals("IMPERSONATION_SCAM", analysis.fraudType)
+        assertTrue(analysis.riskScore >= 50)
+        assertTrue(analysis.title.contains("Fake Utility"))
+    }
+
+    @Test
+    fun testScreenText_GPayLegitimateKiranaStore_passesClean() {
+        val gpayScreenText = "Paying Ramesh Kirana Store ramesh@okicici ₹150.00 Groceries"
+        val analysis = QrThreatEngine.analyzeScreenText(gpayScreenText)
+
+        assertFalse("Clean grocery merchant screen text must NOT be flagged as fraud", analysis.isFraud)
+        assertEquals("SAFE", analysis.riskLevel)
+        assertTrue(analysis.riskScore < 30)
+    }
+
+    @Test
     fun testMultiplePermutations_cleanStateAlwaysPasses() {
         // Run clean check 100 times to guarantee consistency
         for (i in 1..100) {
