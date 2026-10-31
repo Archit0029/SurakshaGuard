@@ -69,8 +69,7 @@ class PaymentMonitorService : AccessibilityService() {
         // 1. Urgency & Coercion triggers
         val URGENCY_TRIGGERS = listOf(
             "urgent", "immediate", "bijli", "disconnect", "penalty", "overdue",
-            "power cut", "bill due", "discom", "challan", "customs", "arrest",
-            "fee", "power bill", "electricity bill", "electricity"
+            "power cut", "bill due urgent", "discom", "challan", "customs", "arrest"
         )
 
         // 2. Remote access triggers
@@ -78,19 +77,19 @@ class PaymentMonitorService : AccessibilityService() {
             "anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid", "screen share"
         )
 
-        // 3. Fraud bait & reverse-payment triggers
-        val FRAUD_BAIT_TRIGGERS = (QrThreatEngine.REVERSE_PAYMENT_PATTERNS + QrThreatEngine.REVERSE_PAYMENT_KEYWORDS + listOf(
+        // 3. Fraud bait & reverse-payment triggers (compound phrases only to avoid matching home screen promo tabs)
+        val FRAUD_BAIT_TRIGGERS = (QrThreatEngine.REVERSE_PAYMENT_PATTERNS + listOf(
             "claim cashback", "cashback reward", "cashback lottery", "enter pin to receive",
             "pin to receive", "receive money", "claim refund", "refund claim", "prize claim",
             "claim prize", "lottery winner", "lucky draw winner", "claim bonus", "googlepay cashback",
-            "paytm cashback", "phonepe cashback"
+            "paytm cashback", "phonepe cashback", "refund verification"
         )).distinct()
 
         // 4. Authority & Fake support impersonation triggers
         val IMPERSONATION_TRIGGERS = listOf(
             "customer care", "customercare", "helpline", "support desk", "bank support", "tech support",
             "kyc update", "pan update", "sim block", "account blocked",
-            "bses", "discom", "uppcl", "tneb", "bescom", "power cut", "bill due", "power bill"
+            "bses", "discom", "uppcl", "tneb", "bescom", "power cut", "bill due urgent", "urgent bijli"
         )
 
         /**
