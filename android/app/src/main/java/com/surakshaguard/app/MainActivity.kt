@@ -256,7 +256,7 @@ fun SetupScreen(
         ) {
             Column {
                 Text(
-                    text = "SurakshaGuard",
+                    text = "Suraksha Guard",
                     color = Color.White,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold
@@ -435,7 +435,7 @@ fun SetupScreen(
         // Card 1: Draw Over Other Apps (Overlay Permission)
         PermissionCard(
             title = "1. Display Over Other Apps",
-            description = "Allows SurakshaGuard to draw the emergency safety shield over payment applications when a threat is active.",
+            description = "Allows Suraksha Guard to draw the emergency safety shield over payment applications when a threat is active.",
             isGranted = hasOverlay,
             buttonText = "Grant Overlay Permission",
             onAction = onRequestOverlay

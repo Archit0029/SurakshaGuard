@@ -218,7 +218,7 @@ class PaymentMonitorService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "SurakshaGuard Payment Sentinel",
+                "Suraksha Guard Payment Sentinel",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Monitors payment app focus to intercept unauthorized transactions."
@@ -231,7 +231,7 @@ class PaymentMonitorService : Service() {
     private fun buildForegroundNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_shield_alert)
-            .setContentTitle("SurakshaGuard Active")
+            .setContentTitle("Suraksha Guard Active")
             .setContentText("Background Sentinel is actively shielding UPI payment transactions.")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

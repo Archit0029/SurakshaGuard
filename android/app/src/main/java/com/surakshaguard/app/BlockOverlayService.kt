@@ -70,7 +70,7 @@ class BlockOverlayService : Service() {
             ?: "सुरक्षा चेतावनी: पेमेंट रोका गया।"
 
         val threatDesc = intent?.getStringExtra(PaymentMonitorService.EXTRA_THREAT_DESC)
-            ?: "SurakshaGuard intercepted this transaction because an unsafe condition was detected."
+            ?: "Suraksha Guard intercepted this transaction because an unsafe condition was detected."
         val threatDescHi = intent?.getStringExtra(PaymentMonitorService.EXTRA_THREAT_DESC_HI)
             ?: "असुरक्षित माहौल पाए जाने पर यूपीआई पेमेंट रोक दिया गया।"
 
@@ -439,7 +439,7 @@ class BlockOverlayService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "SurakshaGuard Blocker Shield",
+                "Suraksha Guard Blocker Shield",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Displays emergency warnings when unauthorized transactions are intercepted."
@@ -452,7 +452,7 @@ class BlockOverlayService : Service() {
     private fun buildForegroundNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_shield_alert)
-            .setContentTitle("SurakshaGuard Active Defense")
+            .setContentTitle("Suraksha Guard Active Defense")
             .setContentText("Emergency fraud blocker overlay deployed.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
