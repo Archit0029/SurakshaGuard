@@ -1,40 +1,32 @@
 package com.surakshaguard.app
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
-import android.app.usage.UsageEvents
-import android.app.usage.UsageStatsManager
+import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.hardware.display.DisplayManager
-import android.media.AudioManager
 import android.os.Build
-import android.os.IBinder
-import android.view.Display
-import androidx.core.app.NotificationCompat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import android.util.Log
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 
 /**
- * Background Payment Monitor Sentinel Service.
+ * Screen-Reading Background Monitor Sentinel Service.
  *
- * Utilizes the official Android UsageStats API (standard for AppLock and Security sentinels).
- * This completely avoids BIND_ACCESSIBILITY_SERVICE so that Google Play Protect does NOT flag
- * the application with financial fraud / identity theft heuristic warnings.
+ * Extends [AccessibilityService] to inspect visible text nodes rendered on-screen
+ * inside target Indian UPI payment applications (Google Pay, PhonePe, Paytm, BHIM).
+ *
+ * Implements recursive tree traversal over [AccessibilityNodeInfo], combining text and
+ * content descriptions to catch social engineering and fraud keywords (e.g. AnyDesk,
+ * urgent disconnection, fake lottery/refund claims) embedded in custom UPI notes or payee titles.
  */
-class PaymentMonitorService : Service() {
+class PaymentMonitorService : AccessibilityService() {
 
     companion object {
+        const val TAG = "SurakshaThreat"
+
         const val PREFS_NAME = "suraksha_prefs"
         const val KEY_DEMO_MODE = "demo_mode_enabled"
 
+        const val EXTRA_REASON = "EXTRA_REASON"
         const val EXTRA_TARGET_PACKAGE = "EXTRA_TARGET_PACKAGE"
         const val EXTRA_TARGET_APP_NAME = "EXTRA_TARGET_APP_NAME"
         const val EXTRA_THREAT_TYPE = "EXTRA_THREAT_TYPE"
@@ -45,9 +37,8 @@ class PaymentMonitorService : Service() {
         const val EXTRA_OFFENDING_PACKAGE = "EXTRA_OFFENDING_PACKAGE"
         const val EXTRA_OFFENDING_APP_NAME = "EXTRA_OFFENDING_APP_NAME"
         const val EXTRA_ACTION_GUIDE = "EXTRA_ACTION_GUIDE"
-
-        private const val NOTIFICATION_ID = 2001
-        private const val CHANNEL_ID = "surakshaguard_sentinel_channel"
+        const val EXTRA_DETECTED_KEYWORD = "EXTRA_DETECTED_KEYWORD"
+        const val EXTRA_FULL_TEXT = "EXTRA_FULL_TEXT"
 
         /**
          * Target Indian UPI applications monitored for pre-authorization fraud interception.
@@ -56,22 +47,22 @@ class PaymentMonitorService : Service() {
             "com.google.android.apps.nbu.paisa.user" to "Google Pay",
             "net.one97.paytm" to "Paytm",
             "com.phonepe.app" to "PhonePe",
-            "in.org.npci.upiapp" to "BHIM UPI",
-            "com.cred.club" to "CRED"
+            "in.org.npci.upiapp" to "BHIM UPI"
         )
 
-        /**
-         * Known remote desktop & screen-sharing tools commonly leveraged in social engineering scams.
-         */
-        val KNOWN_REMOTE_TOOLS = listOf(
-            RemoteAppInfo("com.anydesk.anydeskandroid", "AnyDesk Remote Desktop"),
-            RemoteAppInfo("com.teamviewer.quicksupport.market", "TeamViewer QuickSupport"),
-            RemoteAppInfo("com.teamviewer.teamviewer.market.mobile", "TeamViewer Remote"),
-            RemoteAppInfo("com.sand.airdroid", "AirDroid Remote Support"),
-            RemoteAppInfo("com.rustdesk.rustdesk", "RustDesk Remote Desktop"),
-            RemoteAppInfo("com.zoho.assist", "Zoho Assist"),
-            RemoteAppInfo("com.splashtop.remote", "Splashtop Remote"),
-            RemoteAppInfo("com.logmein.rescuesupport", "LogMeIn Rescue")
+        // 1. Urgency triggers
+        val URGENCY_TRIGGERS = listOf(
+            "urgent", "immediate", "bijli", "disconnect", "penalty", "overdue"
+        )
+
+        // 2. Remote access triggers
+        val REMOTE_ACCESS_TRIGGERS = listOf(
+            "anydesk", "teamviewer", "quicksupport", "rustdesk"
+        )
+
+        // 3. Fraud bait triggers
+        val FRAUD_BAIT_TRIGGERS = listOf(
+            "enter pin to receive", "cashback lottery", "refund verification"
         )
 
         /**
@@ -80,131 +71,109 @@ class PaymentMonitorService : Service() {
         @Volatile
         var bypassUntilTimestamp: Long = 0L
 
-        private const val DEBOUNCE_INTERVAL_MS = 3000L
-        private var lastInterceptionTime = 0L
+        private const val DEBOUNCE_COOLDOWN_MS = 5000L
+        private var lastTriggerTime = 0L
+        private var lastTriggerReason: String? = null
 
         var isRunning = false
             private set
-
-        /**
-         * Evaluates threat environment for real-time fraud interception via ThreatDetector.
-         */
-        fun evaluateThreat(context: Context): ThreatReport {
-            return ThreatDetector.evaluateLiveEnvironment(context)
-        }
-
-        fun hasActivePhoneCall(context: Context): Boolean {
-            return ThreatDetector.checkActivePhoneCall(context)
-        }
-
-        fun detectRemoteApp(context: Context): RemoteAppInfo? {
-            return ThreatDetector.checkActiveRemoteApp(context)
-        }
-
-        fun isScreenMirroringActive(context: Context): Boolean {
-            return ThreatDetector.checkScreenMirroringActive(context)
-        }
     }
 
-    private val serviceJob = Job()
-    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onCreate() {
-        super.onCreate()
+    override fun onServiceConnected() {
+        super.onServiceConnected()
         isRunning = true
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildForegroundNotification())
-        startMonitoringLoop()
+        Log.i(TAG, "SurakshaGuard PaymentMonitorService connected and listening.")
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
-    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
 
-    override fun onDestroy() {
-        super.onDestroy()
-        isRunning = false
-        serviceJob.cancel()
-    }
+        val pkgName = event.packageName?.toString() ?: return
 
-    private fun startMonitoringLoop() {
-        serviceScope.launch {
-            while (isActive) {
-                try {
-                    // Check if 2-minute safe bypass pass is currently active
-                    val now = System.currentTimeMillis()
-                    if (now < bypassUntilTimestamp) {
-                        delay(500L)
-                        continue
-                    }
+        // 1. Event Handling: Verify focused package is in target UPI list
+        if (!TARGET_UPI_PACKAGES.containsKey(pkgName)) return
 
-                    val foregroundPackage = getForegroundPackageName()
-                    if (foregroundPackage != null && TARGET_UPI_PACKAGES.containsKey(foregroundPackage)) {
-                        if (now - lastInterceptionTime >= DEBOUNCE_INTERVAL_MS) {
-                            val threat = evaluateThreat(this@PaymentMonitorService)
-                            if (threat.type != ThreatType.NONE) {
-                                lastInterceptionTime = now
-                                val targetAppName = TARGET_UPI_PACKAGES[foregroundPackage] ?: foregroundPackage
-                                interceptAndBlock(foregroundPackage, targetAppName, threat)
-                            }
-                        }
-                    }
-                } catch (_: Exception) {
-                    // Fail-safe handling for system state reads
-                }
-                delay(350L) // Lightweight 350ms monitoring cadence
-            }
+        val now = System.currentTimeMillis()
+
+        // Honor temporary user bypass (e.g. "I am Safe" pass)
+        if (now < bypassUntilTimestamp) return
+
+        // Check if demo simulation mode is toggled ON
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isDemoMode = prefs.getBoolean(KEY_DEMO_MODE, false)
+
+        val root = rootInActiveWindow ?: return
+
+        // 2. Tree Traversal: Extract all text from active node hierarchy
+        val fullScreenText = extractAllTextFromNode(root)
+        if (fullScreenText.isBlank()) return
+
+        // 3. Heuristic Threat Detection: Normalize to lowercase
+        val lowerText = fullScreenText.lowercase()
+
+        val matchedUrgency = URGENCY_TRIGGERS.filter { lowerText.contains(it) }
+        val matchedRemote = REMOTE_ACCESS_TRIGGERS.filter { lowerText.contains(it) }
+        val matchedBait = FRAUD_BAIT_TRIGGERS.filter { lowerText.contains(it) }
+
+        val hasThreat = isDemoMode || matchedUrgency.isNotEmpty() || matchedRemote.isNotEmpty() || matchedBait.isNotEmpty()
+
+        if (!hasThreat) return
+
+        // Construct exact threat reason and matched keyword
+        val detectedKeywords = mutableListOf<String>()
+        detectedKeywords.addAll(matchedRemote)
+        detectedKeywords.addAll(matchedBait)
+        detectedKeywords.addAll(matchedUrgency)
+
+        val keywordSummary = if (detectedKeywords.isNotEmpty()) {
+            detectedKeywords.joinToString("', '", prefix = "'", postfix = "'")
+        } else if (isDemoMode) {
+            "demo_simulation"
+        } else {
+            "suspicious_social_engineering"
         }
-    }
 
-    /**
-     * Extracts the currently focused foreground package using the official Android UsageStats API.
-     */
-    private fun getForegroundPackageName(): String? {
-        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
-            ?: return null
-
-        val endTime = System.currentTimeMillis()
-        val beginTime = endTime - 3000L
-
-        val usageEvents = usageStatsManager.queryEvents(beginTime, endTime) ?: return null
-        val event = UsageEvents.Event()
-        var lastForegroundApp: String? = null
-
-        while (usageEvents.hasNextEvent()) {
-            usageEvents.getNextEvent(event)
-            if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
-                lastForegroundApp = event.packageName
-            }
+        val reasonText = when {
+            matchedRemote.isNotEmpty() ->
+                "Detected unauthorized remote access keyword: $keywordSummary in transaction screen."
+            matchedBait.isNotEmpty() ->
+                "Detected reverse-payment fraud bait: $keywordSummary."
+            matchedUrgency.isNotEmpty() ->
+                "Detected high-urgency extortion / power disconnection coercion trigger: $keywordSummary."
+            isDemoMode ->
+                "Demo Simulation Mode: Verified real-time payment application focus."
+            else ->
+                "Detected high-risk social engineering markers on payment screen."
         }
-        return lastForegroundApp
-    }
 
-    /**
-     * Minimizes the target payment application and deploys the full-screen blocker overlay.
-     */
-    private fun interceptAndBlock(targetPackage: String, targetAppName: String, threat: ThreatReport) {
-        // Step 1: Instantly minimize the payment application to the Android home screen
-        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        // 4. Prevent duplicate spam triggers using 5-second debounce window
+        if (now - lastTriggerTime < DEBOUNCE_COOLDOWN_MS && lastTriggerReason == reasonText) {
+            return
         }
-        startActivity(homeIntent)
 
-        // Step 2: Launch the emergency full-screen red shield overlay with comprehensive threat payload
+        lastTriggerTime = now
+        lastTriggerReason = reasonText
+
+        // Action 1: Log exact match and full screen text
+        Log.e(TAG, "🚨 THREAT DETECTED in $pkgName! Reason: $reasonText | Keywords: $keywordSummary | Full Text: $fullScreenText")
+
+        // Action 2: Immediately call performGlobalAction(GLOBAL_ACTION_HOME) to minimize UPI app
+        performGlobalAction(GLOBAL_ACTION_HOME)
+
+        // Action 3: Launch BlockOverlayService via Intent with payload
+        val appName = TARGET_UPI_PACKAGES[pkgName] ?: pkgName
         val overlayIntent = Intent(this, BlockOverlayService::class.java).apply {
-            putExtra(EXTRA_TARGET_PACKAGE, targetPackage)
-            putExtra(EXTRA_TARGET_APP_NAME, targetAppName)
-            putExtra(EXTRA_THREAT_TYPE, threat.type.name)
-            putExtra(EXTRA_THREAT_TITLE, threat.title)
-            putExtra(EXTRA_THREAT_TITLE_HI, threat.titleHindi)
-            putExtra(EXTRA_THREAT_DESC, threat.description)
-            putExtra(EXTRA_THREAT_DESC_HI, threat.descriptionHindi)
-            putExtra(EXTRA_OFFENDING_PACKAGE, threat.offendingPackage)
-            putExtra(EXTRA_OFFENDING_APP_NAME, threat.offendingAppName)
-            putExtra(EXTRA_ACTION_GUIDE, threat.actionGuide)
+            putExtra(EXTRA_REASON, reasonText)
+            putExtra(EXTRA_TARGET_PACKAGE, pkgName)
+            putExtra(EXTRA_TARGET_APP_NAME, appName)
+            putExtra(EXTRA_DETECTED_KEYWORD, keywordSummary)
+            putExtra(EXTRA_FULL_TEXT, fullScreenText)
+            putExtra(EXTRA_THREAT_TYPE, if (isDemoMode) ThreatType.DEMO_MODE.name else ThreatType.FRAUD_QR_CODE.name)
+            putExtra(EXTRA_THREAT_TITLE, "⚠️ PAYMENT INTERCEPTED: HIGH RISK OF SCAM")
+            putExtra(EXTRA_THREAT_TITLE_HI, "⚠️ यूपीआई भुगतान रोका गया: धोखाधड़ी का गंभीर खतरा")
+            putExtra(EXTRA_THREAT_DESC, reasonText)
+            putExtra(EXTRA_THREAT_DESC_HI, "सुरक्षागार्ड ने इस भुगतान में धोखाधड़ी के संदिग्ध शब्द पाए हैं।")
+            putExtra(EXTRA_ACTION_GUIDE, "Do not enter your UPI PIN. Verify the payment details independently.")
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -214,26 +183,48 @@ class PaymentMonitorService : Service() {
         }
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Suraksha Guard Payment Sentinel",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Monitors payment app focus to intercept unauthorized transactions."
+    /**
+     * Recursive helper function that traverses the entire active node hierarchy (`rootInActiveWindow`),
+     * combining `node.text` and `node.contentDescription`.
+     */
+    fun extractAllTextFromNode(node: AccessibilityNodeInfo?): String {
+        if (node == null) return ""
+        val sb = StringBuilder()
+        collectTextRecursively(node, sb)
+        return sb.toString().trim()
+    }
+
+    private fun collectTextRecursively(node: AccessibilityNodeInfo?, sb: StringBuilder) {
+        if (node == null) return
+
+        node.text?.let {
+            val s = it.toString().trim()
+            if (s.isNotBlank()) {
+                sb.append(s).append(" ")
             }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
+        }
+
+        node.contentDescription?.let {
+            val s = it.toString().trim()
+            if (s.isNotBlank()) {
+                sb.append(s).append(" ")
+            }
+        }
+
+        val childCount = node.childCount
+        for (i in 0 until childCount) {
+            val child = node.getChild(i)
+            collectTextRecursively(child, sb)
         }
     }
 
-    private fun buildForegroundNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_shield_alert)
-            .setContentTitle("Suraksha Guard Active")
-            .setContentText("Background Sentinel is actively shielding UPI payment transactions.")
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+    override fun onInterrupt() {
+        Log.w(TAG, "SurakshaGuard PaymentMonitorService interrupted.")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isRunning = false
+        Log.i(TAG, "SurakshaGuard PaymentMonitorService destroyed.")
     }
 }

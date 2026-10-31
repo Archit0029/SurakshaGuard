@@ -193,6 +193,29 @@ class ThreatDetectorTest {
     }
 
     @Test
+    fun testPaymentMonitorKeywords_urgencyAndRemoteAccess_matched() {
+        val noteText = "Paying Support valid@upi ₹1,500.00 Urgent AnyDesk Fee"
+        val lower = noteText.lowercase()
+
+        val matchedUrgent = PaymentMonitorService.URGENCY_TRIGGERS.filter { lower.contains(it) }
+        val matchedRemote = PaymentMonitorService.REMOTE_ACCESS_TRIGGERS.filter { lower.contains(it) }
+
+        assertTrue("Must detect 'urgent' keyword", matchedUrgent.contains("urgent"))
+        assertTrue("Must detect 'anydesk' keyword", matchedRemote.contains("anydesk"))
+    }
+
+    @Test
+    fun testPaymentMonitorKeywords_fraudBaitTriggers_matched() {
+        val screenText = "Paying Lucky Draw winner@paytm ₹2,500.00 Enter PIN to receive Cashback Lottery"
+        val lower = screenText.lowercase()
+
+        val matchedBait = PaymentMonitorService.FRAUD_BAIT_TRIGGERS.filter { lower.contains(it) }
+
+        assertTrue("Must detect 'enter pin to receive'", matchedBait.contains("enter pin to receive"))
+        assertTrue("Must detect 'cashback lottery'", matchedBait.contains("cashback lottery"))
+    }
+
+    @Test
     fun testMultiplePermutations_cleanStateAlwaysPasses() {
         // Run clean check 100 times to guarantee consistency
         for (i in 1..100) {

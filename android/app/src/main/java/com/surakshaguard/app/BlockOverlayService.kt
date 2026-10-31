@@ -65,11 +65,12 @@ class BlockOverlayService : Service() {
         val threatType = runCatching { ThreatType.valueOf(threatTypeStr) }.getOrDefault(ThreatType.DEMO_MODE)
 
         val threatTitle = intent?.getStringExtra(PaymentMonitorService.EXTRA_THREAT_TITLE)
-            ?: "SECURITY ALERT: Suspicious activity detected."
+            ?: "⚠️ PAYMENT INTERCEPTED: HIGH RISK OF SCAM"
         val threatTitleHi = intent?.getStringExtra(PaymentMonitorService.EXTRA_THREAT_TITLE_HI)
-            ?: "सुरक्षा चेतावनी: पेमेंट रोका गया।"
+            ?: "⚠️ यूपीआई भुगतान रोका गया: धोखाधड़ी का गंभीर खतरा"
 
-        val threatDesc = intent?.getStringExtra(PaymentMonitorService.EXTRA_THREAT_DESC)
+        val threatDesc = intent?.getStringExtra(PaymentMonitorService.EXTRA_REASON)
+            ?: intent?.getStringExtra(PaymentMonitorService.EXTRA_THREAT_DESC)
             ?: "Suraksha Guard intercepted this transaction because an unsafe condition was detected."
         val threatDescHi = intent?.getStringExtra(PaymentMonitorService.EXTRA_THREAT_DESC_HI)
             ?: "असुरक्षित माहौल पाए जाने पर यूपीआई पेमेंट रोक दिया गया।"
@@ -396,14 +397,14 @@ class BlockOverlayService : Service() {
         }
         cardLayout.addView(allowButton, allowLp)
 
-        // 7. Secondary Action: Dismiss & Return Home
+        // 7. Primary Safety Action: Close & Keep Me Safe
         val dismissButton = Button(context).apply {
-            text = "Dismiss & Return Home"
-            textSize = 12.5f
+            text = "🛡️ Close & Keep Me Safe"
+            textSize = 13.5f
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#CBD5E1"))
+            setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1E293B")) // Slate neutral
+                setColor(Color.parseColor("#DC2626")) // High-contrast safety red
                 cornerRadius = dp(12).toFloat()
             }
             setOnClickListener {
@@ -413,9 +414,9 @@ class BlockOverlayService : Service() {
         }
         val dismissLp = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
-            dp(42)
+            dp(46)
         ).apply {
-            bottomMargin = dp(8)
+            bottomMargin = dp(10)
         }
         cardLayout.addView(dismissButton, dismissLp)
 

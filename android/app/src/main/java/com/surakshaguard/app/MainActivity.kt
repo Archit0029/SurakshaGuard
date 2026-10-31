@@ -142,14 +142,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun ensureSentinelRunning() {
-        if (hasOverlayPermission && hasUsagePermission && !PaymentMonitorService.isRunning) {
-            val serviceIntent = Intent(this, PaymentMonitorService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ContextCompat.startForegroundService(this, serviceIntent)
-            } else {
-                startService(serviceIntent)
-            }
-        }
+        // PaymentMonitorService is an AccessibilityService bound and managed directly
+        // by the Android Accessibility Framework once enabled in system settings.
     }
 
     private fun requestOverlayPermission() {
@@ -187,23 +181,27 @@ class MainActivity : ComponentActivity() {
             putExtra(PaymentMonitorService.EXTRA_THREAT_TYPE, ThreatType.DEMO_MODE.name)
             putExtra(
                 PaymentMonitorService.EXTRA_THREAT_TITLE,
-                "DEMO TEST: Payment Interceptor Triggered"
+                "⚠️ PAYMENT INTERCEPTED: HIGH RISK OF SCAM"
             )
             putExtra(
                 PaymentMonitorService.EXTRA_THREAT_TITLE_HI,
-                "डेमो टेस्ट: यूपीआई पेमेंट सुरक्षा इंटरसेप्टर सक्रिय"
+                "⚠️ यूपीआई भुगतान रोका गया: धोखाधड़ी का गंभीर खतरा"
+            )
+            putExtra(
+                PaymentMonitorService.EXTRA_REASON,
+                "Detected dangerous keyword: 'urgent' / 'anydesk' in transaction note."
             )
             putExtra(
                 PaymentMonitorService.EXTRA_THREAT_DESC,
-                "This is a demonstration of Suraksha Guard's real-time interception shield. In live mode, it only blocks if an active phone call, screen-sharing application, or fraudulent payment QR is detected."
+                "Detected dangerous keyword: 'urgent' / 'anydesk' in transaction note."
             )
             putExtra(
                 PaymentMonitorService.EXTRA_THREAT_DESC_HI,
-                "यह सुरक्षा गार्ड के सुरक्षा शील्ड का लाइव परीक्षण है। सामान्य उपयोग में यह केवल फोन कॉल, स्क्रीन शेयरिंग या फर्जी क्यूआर पाए जाने पर ही रोकता है।"
+                "ट्रांजेक्शन नोट में संदिग्ध 'urgent' / 'anydesk' शब्द पाए गए।"
             )
             putExtra(
                 PaymentMonitorService.EXTRA_ACTION_GUIDE,
-                "Test successful. Use 'I am Safe' or 'Dismiss' to close."
+                "Do not enter your UPI PIN. Verify payee identity independently before transferring funds."
             )
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -266,8 +264,8 @@ class MainActivity : ComponentActivity() {
         }
 
         fun isAccessibilityServiceEnabled(context: Context): Boolean {
-            if (SurakshaAccessibilityService.isRunning) return true
-            val expectedComponentName = ComponentName(context, SurakshaAccessibilityService::class.java).flattenToString()
+            if (PaymentMonitorService.isRunning) return true
+            val expectedComponentName = ComponentName(context, PaymentMonitorService::class.java).flattenToString()
             val enabledServices = Settings.Secure.getString(
                 context.contentResolver,
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
@@ -728,14 +726,14 @@ fun SetupScreen(
 
         // Card 3: In-App QR Protection (Accessibility Service)
         PermissionCard(
-            title = "3. In-App QR Protection (Google Pay / PhonePe)",
-            description = "Crucial for detecting fraud when scanning QRs inside Google Pay, PhonePe, or Paytm camera. Automatically inspects payee details and halts transactions if a scam is detected before you enter your UPI PIN.",
+            title = "3. In-App QR Protection (Google Pay, PhonePe, Paytm)",
+            description = "Inspects visible on-screen text nodes inside UPI payment apps to detect fraud keywords (urgent, AnyDesk, fake cashback). Enable 'SurakshaGuard' under Downloaded Apps / Installed Services.",
             isGranted = hasAccessibility,
-            buttonText = "Step 2: Turn ON in Accessibility",
+            buttonText = "Enable 'SurakshaGuard' in Accessibility",
             onAction = onRequestAccessibility,
-            secondaryButtonText = "🔓 Step 1: Open App Info (If Blocked)",
+            secondaryButtonText = "🔓 Step 1: Open App Info (If Restricted)",
             onSecondaryAction = onOpenAppInfo,
-            helpNotice = "⚠️ Android 13/14 Security Step:\nIf your phone shows 'Restricted Setting' / greyed out toggle:\n1. Tap 'Step 1: Open App Info' above\n2. Tap the 3 dots (⋮) in the top-right corner\n3. Tap 'Allow restricted settings' & enter phone PIN\n4. Return here and tap 'Step 2: Turn ON in Accessibility'"
+            helpNotice = "⚠️ Android 13/14 Notice: If toggle is greyed out / restricted:\n1. Tap 'Step 1: Open App Info' above\n2. Tap the 3 dots (⋮) in top-right corner\n3. Tap 'Allow restricted settings'\n4. Return here and enable 'SurakshaGuard' in Accessibility"
         )
 
         Spacer(modifier = Modifier.height(4.dp))
