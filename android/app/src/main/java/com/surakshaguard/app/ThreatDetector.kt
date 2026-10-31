@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.media.AudioManager
 import android.os.Build
+import android.provider.Settings
+import android.telecom.TelecomManager
 import android.telephony.TelephonyManager
 import android.view.Display
 
@@ -43,13 +45,17 @@ object ThreatDetector {
 
     val KNOWN_REMOTE_TOOLS = listOf(
         RemoteAppInfo("com.anydesk.anydeskandroid", "AnyDesk Remote Desktop"),
+        RemoteAppInfo("com.anydesk.adcontrol.ad1", "AnyDesk Control Plugin"),
+        RemoteAppInfo("com.anydesk.adcontrol.ad2", "AnyDesk Control Plugin 2"),
         RemoteAppInfo("com.teamviewer.quicksupport.market", "TeamViewer QuickSupport"),
         RemoteAppInfo("com.teamviewer.teamviewer.market.mobile", "TeamViewer Remote"),
         RemoteAppInfo("com.sand.airdroid", "AirDroid Remote Support"),
         RemoteAppInfo("com.rustdesk.rustdesk", "RustDesk Remote Desktop"),
         RemoteAppInfo("com.zoho.assist", "Zoho Assist"),
         RemoteAppInfo("com.splashtop.remote", "Splashtop Remote"),
-        RemoteAppInfo("com.logmein.rescuesupport", "LogMeIn Rescue")
+        RemoteAppInfo("com.logmein.rescuesupport", "LogMeIn Rescue"),
+        RemoteAppInfo("com.koushikdutta.vysor", "Vysor Screen Mirror"),
+        RemoteAppInfo("com.realvnc.viewer.android", "RealVNC Remote Viewer")
     )
 
     /**
@@ -132,11 +138,21 @@ object ThreatDetector {
     }
 
     /**
-     * Checks if a phone call is genuinely active using TelephonyManager and AudioManager.
-     * Strictly avoids false positives from Bluetooth media routing, VoIP background audio, etc.
+     * Checks if a phone call is genuinely active using TelecomManager, TelephonyManager, and AudioManager.
+     * Accurately detects active cellular calls, VoLTE, VoWiFi, and VoIP communication calls (e.g. WhatsApp / dialer).
      */
     fun checkActivePhoneCall(context: Context): Boolean {
-        // Method A: Check TelephonyManager call state
+        // Method 1: TelecomManager (official Android telephony subsystem)
+        try {
+            val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
+            if (telecomManager != null && telecomManager.isInCall) {
+                return true
+            }
+        } catch (_: Throwable) {
+            // Permission or security exception fallback
+        }
+
+        // Method 2: Check TelephonyManager call state
         try {
             val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
             if (tm != null) {
@@ -145,23 +161,45 @@ object ThreatDetector {
                     return true
                 }
             }
-        } catch (_: SecurityException) {
+        } catch (_: Throwable) {
             // Fall through to audio manager
         }
 
-        // Method B: AudioManager.MODE_IN_CALL is ONLY set during an active cellular call.
-        // We strictly DO NOT check MODE_IN_COMMUNICATION to prevent false alarms from Bluetooth headsets or games.
+        // Method 3: AudioManager mode (always accessible without permissions)
+        // Detects active cellular calls, VoLTE, VoWiFi, and VoIP communication calls
         val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
-        return am.mode == AudioManager.MODE_IN_CALL
+        val mode = am.mode
+        return mode == AudioManager.MODE_IN_CALL ||
+               mode == AudioManager.MODE_IN_COMMUNICATION ||
+               mode == AudioManager.MODE_RINGTONE
     }
 
     /**
-     * Checks whether any known remote desktop tool is installed AND actively running / recently opened.
-     * Mere installation without being active or running does NOT trigger false alarms.
+     * Checks whether any known remote desktop tool is installed AND actively running / recently opened / configured.
+     * Checks enabled Accessibility Services, active virtual displays, and UsageStats.
      */
     fun checkActiveRemoteApp(context: Context): RemoteAppInfo? {
-        val pm = context.packageManager
+        // Heuristic 1: Check enabled accessibility services in Android system settings.
+        // Remote tools (AnyDesk, TeamViewer QuickSupport, RustDesk) REQUIRE an accessibility service to control or stream.
+        val enabledServices = try {
+            Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+        } catch (_: Throwable) {
+            null
+        }
 
+        if (!enabledServices.isNullOrBlank()) {
+            for (tool in KNOWN_REMOTE_TOOLS) {
+                if (enabledServices.contains(tool.packageName, ignoreCase = true)) {
+                    return tool
+                }
+            }
+        }
+
+        // Heuristic 2: Verify installed packages and active / recent foreground or background execution
+        val pm = context.packageManager
         for (tool in KNOWN_REMOTE_TOOLS) {
             val isInstalled = try {
                 pm.getPackageInfo(tool.packageName, 0)
@@ -194,19 +232,36 @@ object ThreatDetector {
             }
         }
 
-        // 2. Check if the app was used in the last 10 minutes via UsageStatsManager
+        // 2. Check UsageStatsManager for recent usage within the last 30 minutes
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
         if (usageStatsManager != null) {
             val now = System.currentTimeMillis()
-            val tenMinutesAgo = now - (10 * 60 * 1000L)
-            val usageEvents = usageStatsManager.queryEvents(tenMinutesAgo, now)
+            val thirtyMinutesAgo = now - (30 * 60 * 1000L)
+
+            val stats = runCatching {
+                usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_BEST, thirtyMinutesAgo, now)
+            }.getOrNull()
+
+            if (!stats.isNullOrEmpty()) {
+                for (stat in stats) {
+                    if (stat.packageName == packageName && stat.lastTimeUsed > thirtyMinutesAgo) {
+                        return true
+                    }
+                }
+            }
+
+            val usageEvents = runCatching {
+                usageStatsManager.queryEvents(thirtyMinutesAgo, now)
+            }.getOrNull()
+
             if (usageEvents != null) {
                 val event = UsageEvents.Event()
                 while (usageEvents.hasNextEvent()) {
                     usageEvents.getNextEvent(event)
                     if (event.packageName == packageName) {
                         if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
-                            event.eventType == UsageEvents.Event.FOREGROUND_SERVICE_START) {
+                            event.eventType == UsageEvents.Event.FOREGROUND_SERVICE_START ||
+                            event.eventType == UsageEvents.Event.USER_INTERACTION) {
                             return true
                         }
                     }
@@ -219,8 +274,8 @@ object ThreatDetector {
 
     /**
      * Checks if actual external screen casting or mirroring is active.
-     * Accurately filters out internal OEM virtual displays (Under-Display Fingerprint Sensors,
-     * Always-On Display, Smart Sidebars, Dual Screens).
+     * Accurately detects MediaProjection virtual displays while filtering out internal OEM displays
+     * (Under-Display Fingerprint Sensors, Always-On Display, Smart Sidebars, Dual Screens).
      */
     fun checkScreenMirroringActive(context: Context): Boolean {
         val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
@@ -244,13 +299,8 @@ object ThreatDetector {
                 continue
             }
 
-            val isPresentation = (display.flags and Display.FLAG_PRESENTATION) != 0
-            val isPrivate = (display.flags and Display.FLAG_PRIVATE) != 0
-
-            // Only flag if it is an un-private external presentation display
-            if (isPresentation && !isPrivate) {
-                return true
-            }
+            // Virtual display from MediaProjection (AnyDesk, TeamViewer, Cast, Screen Recording)
+            return true
         }
         return false
     }

@@ -155,7 +155,14 @@ class PaymentMonitorService : AccessibilityService() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val isDemoMode = prefs.getBoolean(KEY_DEMO_MODE, false)
 
-        // 2. Multi-Window & Node Tree Traversal: Extract all text from interactive windows + event payload
+        // 2. LIVE SYSTEM-LEVEL SENSOR CHECK:
+        // Detect if user is on an active phone call OR running a remote screen sharing tool (AnyDesk/TeamViewer)
+        val isCallActive = ThreatDetector.checkActivePhoneCall(this)
+        val activeRemoteApp = ThreatDetector.checkActiveRemoteApp(this)
+        val isScreenMirroring = ThreatDetector.checkScreenMirroringActive(this)
+        val hasSystemThreat = isCallActive || (activeRemoteApp != null) || isScreenMirroring
+
+        // 3. Multi-Window & Node Tree Traversal: Extract all text from interactive windows + event payload
         val textTokens = mutableListOf<String>()
 
         val windowList = runCatching { windows }.getOrNull()
@@ -182,9 +189,8 @@ class PaymentMonitorService : AccessibilityService() {
         }
 
         val fullScreenText = textTokens.distinct().joinToString(" ").trim()
-        if (fullScreenText.isBlank()) return
 
-        // 3. Heuristic & Deep QR Threat Detection: Normalize to lowercase
+        // 4. Content & Deep QR Threat Detection: Normalize to lowercase
         val lowerText = fullScreenText.lowercase()
 
         // Direct Raw UPI URI Detection (handles Google Lens / Camera previewing raw QR payloads)
@@ -195,19 +201,25 @@ class PaymentMonitorService : AccessibilityService() {
             null
         }
 
-        // CRITICAL GUARD 1: If user is on the home/navigation screen, NEVER evaluate or intercept!
-        if (rawUriAnalysis == null && QrThreatEngine.isHomeScreen(lowerText)) {
-            return
-        }
+        // If there is NO system threat and NO demo mode:
+        // Apply guard filters to avoid false positives on standard navigation screens:
+        if (!hasSystemThreat && !isDemoMode) {
+            if (fullScreenText.isBlank()) return
 
-        // CRITICAL GUARD 2: Must be on an active payment checkout screen (or have direct raw QR threat)
-        val vpa = QrThreatEngine.extractVpaFallback(fullScreenText)
-        if (rawUriAnalysis == null && !isDemoMode && !QrThreatEngine.isPaymentScreen(lowerText, vpa)) {
-            return
+            // CRITICAL GUARD 1: If user is on the home/navigation screen, NEVER evaluate or intercept!
+            if (rawUriAnalysis == null && QrThreatEngine.isHomeScreen(lowerText)) {
+                return
+            }
+
+            // CRITICAL GUARD 2: Must be on an active payment checkout screen (or have direct raw QR threat)
+            val vpa = QrThreatEngine.extractVpaFallback(fullScreenText)
+            if (rawUriAnalysis == null && !QrThreatEngine.isPaymentScreen(lowerText, vpa)) {
+                return
+            }
         }
 
         // Evaluate screen contents through QrThreatEngine intelligence
-        val qrAnalysis = rawUriAnalysis ?: QrThreatEngine.analyzeScreenText(fullScreenText)
+        val qrAnalysis = rawUriAnalysis ?: if (fullScreenText.isNotBlank()) QrThreatEngine.analyzeScreenText(fullScreenText) else null
 
         val matchedUrgency = URGENCY_TRIGGERS.filter { lowerText.contains(it) }
         val matchedRemote = REMOTE_ACCESS_TRIGGERS.filter { lowerText.contains(it) }
@@ -217,7 +229,8 @@ class PaymentMonitorService : AccessibilityService() {
         val hasKeywordThreat = matchedRemote.isNotEmpty() || matchedBait.isNotEmpty() ||
                 matchedUrgency.isNotEmpty() || matchedImpersonation.isNotEmpty()
 
-        val hasThreat = isDemoMode || qrAnalysis.isFraud || hasKeywordThreat
+        val isQrFraud = qrAnalysis?.isFraud == true
+        val hasThreat = isDemoMode || hasSystemThreat || isQrFraud || hasKeywordThreat
 
         if (!hasThreat) return
 
@@ -227,11 +240,17 @@ class PaymentMonitorService : AccessibilityService() {
         detectedKeywords.addAll(matchedBait)
         detectedKeywords.addAll(matchedUrgency)
         detectedKeywords.addAll(matchedImpersonation)
-        if (qrAnalysis.flaggedPatterns.isNotEmpty()) {
+        if (qrAnalysis != null && qrAnalysis.flaggedPatterns.isNotEmpty()) {
             detectedKeywords.addAll(qrAnalysis.flaggedPatterns)
         }
 
-        val keywordSummary = if (detectedKeywords.isNotEmpty()) {
+        val keywordSummary = if (activeRemoteApp != null) {
+            activeRemoteApp.displayName
+        } else if (isCallActive) {
+            "active_phone_call"
+        } else if (isScreenMirroring) {
+            "screen_mirroring"
+        } else if (detectedKeywords.isNotEmpty()) {
             detectedKeywords.distinct().take(4).joinToString("', '", prefix = "'", postfix = "'")
         } else if (isDemoMode) {
             "demo_simulation"
@@ -240,21 +259,54 @@ class PaymentMonitorService : AccessibilityService() {
         }
 
         // Formulate tailored threat titles, descriptions, and action advice
+        val threatType: ThreatType
         val threatTitleEn: String
         val threatTitleHi: String
         val reasonText: String
         val threatDescHi: String
+        var offendingPackage: String? = null
+        var offendingAppName: String? = null
         val actionGuide: String
 
         when {
-            qrAnalysis.isFraud -> {
-                threatTitleEn = qrAnalysis.title
+            activeRemoteApp != null -> {
+                threatType = ThreatType.REMOTE_SCREEN_SHARE
+                threatTitleEn = "⚠️ HIGH THREAT: SCREEN-SHARING APP ACTIVE"
+                threatTitleHi = "⚠️ खतरे की चेतावनी: स्क्रीन शेयरिंग ऐप सक्रिय पाई गई"
+                reasonText = "The remote access tool '${activeRemoteApp.displayName}' is currently active on your device. Scammers use this to view your screen in real time, capture OTPs, and steal your UPI PIN."
+                threatDescHi = "आपके फोन में '${activeRemoteApp.displayName}' स्क्रीन शेयरिंग ऐप सक्रिय है। जालसाज इसके जरिए आपकी स्क्रीन और यूपीआई पिन देखकर पैसे निकाल सकते हैं।"
+                offendingPackage = activeRemoteApp.packageName
+                offendingAppName = activeRemoteApp.displayName
+                actionGuide = "Tap below to open App Info and Force Stop or Uninstall ${activeRemoteApp.displayName} immediately."
+            }
+            isScreenMirroring -> {
+                threatType = ThreatType.REMOTE_SCREEN_SHARE
+                threatTitleEn = "⚠️ HIGH THREAT: LIVE SCREEN CASTING ACTIVE"
+                threatTitleHi = "⚠️ खतरे की चेतावनी: लाइव स्क्रीन कास्टिंग सक्रिय है"
+                reasonText = "Your device screen is currently being broadcast or captured by an external/virtual display. Entering your UPI PIN now will expose your credentials."
+                threatDescHi = "आपके फोन की स्क्रीन इस समय बाहरी स्क्रीन या रिकॉर्डर पर शेयर हो रही है। इस समय यूपीआई पिन डालना असुरक्षित है।"
+                offendingAppName = "Active Screen Cast"
+                actionGuide = "Stop screen sharing or casting before completing this payment."
+            }
+            isCallActive -> {
+                threatType = ThreatType.ACTIVE_PHONE_CALL
+                threatTitleEn = "⚠️ CRITICAL ALERT: ACTIVE PHONE CALL IN PROGRESS"
+                threatTitleHi = "⚠️ गंभीर चेतावनी: चालू फोन कॉल के दौरान पेमेंट का प्रयास"
+                reasonText = "You are currently on a live phone call while opening a payment application. Cybercriminals keep victims on calls using urgency (fake electricity bills, customs, or bank freezes) to coerce them into authorizing UPI transfers."
+                threatDescHi = "आप इस समय फोन कॉल पर बात कर रहे हैं। जालसाज अक्सर बिजली बिल कटने, बैंक या पुलिस का डर दिखाकर कॉल पर रखते हुए दबाव में यूपीआई पिन डलवाते हैं।"
+                actionGuide = "Please disconnect your phone call first. Legitimate authorities never demand payments while keeping you on the phone."
+            }
+            isQrFraud -> {
+                threatType = ThreatType.FRAUD_QR_CODE
+                threatTitleEn = qrAnalysis!!.title
                 threatTitleHi = qrAnalysis.titleHindi
                 reasonText = "${qrAnalysis.explanation}\n\n• Payee: ${qrAnalysis.payeeName}\n• VPA Handle: ${qrAnalysis.payeeVpa}"
                 threatDescHi = qrAnalysis.explanationHindi
+                offendingAppName = qrAnalysis.payeeVpa
                 actionGuide = qrAnalysis.actionAdvice
             }
             matchedRemote.isNotEmpty() -> {
+                threatType = ThreatType.REMOTE_SCREEN_SHARE
                 threatTitleEn = "⚠️ PAYMENT INTERCEPTED: REMOTE ACCESS FRAUD"
                 threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: रिमोट ऐप धोखाधड़ी"
                 reasonText = "Detected dangerous remote desktop / screen control keyword: $keywordSummary on payment screen."
@@ -262,6 +314,7 @@ class PaymentMonitorService : AccessibilityService() {
                 actionGuide = "Do NOT enter your UPI PIN. Never make payments requested over AnyDesk or TeamViewer."
             }
             matchedBait.isNotEmpty() -> {
+                threatType = ThreatType.FRAUD_QR_CODE
                 threatTitleEn = "⚠️ PAYMENT INTERCEPTED: FAKE CASHBACK / REWARD TRAP"
                 threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: फर्जी कैशबैक/इनाम का झांसा"
                 reasonText = "Detected deceptive reverse-payment trap ($keywordSummary). In UPI, you never scan a QR or enter PIN to receive money."
@@ -269,6 +322,7 @@ class PaymentMonitorService : AccessibilityService() {
                 actionGuide = "Never enter your UPI PIN to claim money, refunds, or lottery prizes."
             }
             matchedUrgency.isNotEmpty() -> {
+                threatType = ThreatType.FRAUD_QR_CODE
                 threatTitleEn = "⚠️ PAYMENT INTERCEPTED: HIGH-URGENCY COERCION"
                 threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: तात्कालिक दबाव/बिजली बिल धमकी"
                 reasonText = "Detected high-urgency extortion / power disconnection coercion trigger: $keywordSummary."
@@ -276,6 +330,7 @@ class PaymentMonitorService : AccessibilityService() {
                 actionGuide = "Do not pay under pressure. Official utility discoms never disconnect immediately via UPI."
             }
             matchedImpersonation.isNotEmpty() -> {
+                threatType = ThreatType.FRAUD_QR_CODE
                 threatTitleEn = "⚠️ PAYMENT INTERCEPTED: FAKE SUPPORT / IMPERSONATION"
                 threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: फर्जी कस्टमर केयर / बैंक जालसाजी"
                 reasonText = "Detected suspicious helpline or fake customer support marker: $keywordSummary."
@@ -283,6 +338,7 @@ class PaymentMonitorService : AccessibilityService() {
                 actionGuide = "Disconnect any phone call and verify contact details through official apps."
             }
             isDemoMode -> {
+                threatType = ThreatType.DEMO_MODE
                 threatTitleEn = "🛡️ DEMO TEST: PAYMENT INTERCEPTION VERIFIED"
                 threatTitleHi = "🛡️ टेस्ट डेमो: यूपीआई सुरक्षा परीक्षण सक्रिय"
                 reasonText = "Demo Simulation Mode: Successfully intercepted active payment application."
@@ -290,6 +346,7 @@ class PaymentMonitorService : AccessibilityService() {
                 actionGuide = "Disable Demo Mode in Suraksha Guard when you are done testing."
             }
             else -> {
+                threatType = ThreatType.FRAUD_QR_CODE
                 threatTitleEn = "⚠️ PAYMENT INTERCEPTED: HIGH RISK OF SCAM"
                 threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: धोखाधड़ी का गंभीर खतरा"
                 reasonText = "Detected high-risk social engineering markers on payment screen."
@@ -320,11 +377,13 @@ class PaymentMonitorService : AccessibilityService() {
             putExtra(EXTRA_TARGET_APP_NAME, appName)
             putExtra(EXTRA_DETECTED_KEYWORD, keywordSummary)
             putExtra(EXTRA_FULL_TEXT, fullScreenText)
-            putExtra(EXTRA_THREAT_TYPE, if (isDemoMode) ThreatType.DEMO_MODE.name else ThreatType.FRAUD_QR_CODE.name)
+            putExtra(EXTRA_THREAT_TYPE, threatType.name)
             putExtra(EXTRA_THREAT_TITLE, threatTitleEn)
             putExtra(EXTRA_THREAT_TITLE_HI, threatTitleHi)
             putExtra(EXTRA_THREAT_DESC, reasonText)
             putExtra(EXTRA_THREAT_DESC_HI, threatDescHi)
+            putExtra(EXTRA_OFFENDING_PACKAGE, offendingPackage)
+            putExtra(EXTRA_OFFENDING_APP_NAME, offendingAppName)
             putExtra(EXTRA_ACTION_GUIDE, actionGuide)
         }
 

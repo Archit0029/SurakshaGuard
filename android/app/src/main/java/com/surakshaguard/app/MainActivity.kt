@@ -65,6 +65,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +82,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 
 /**
  * Suraksha Guard Setup, Monitoring & QR Phishing Interceptor Activity.
@@ -120,6 +122,13 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF0A0A1A)
                 ) {
+                    LaunchedEffect(Unit) {
+                        while (true) {
+                            updatePermissionStates()
+                            delay(2000L)
+                        }
+                    }
+
                     SetupScreen(
                         isProtectionArmed = isProtectionArmed,
                         onToggleMasterProtection = { toggleMasterProtection() },
@@ -141,7 +150,9 @@ class MainActivity : ComponentActivity() {
                         onOpenAppInfo = { openAppInfoForRestrictedSettings() },
                         onTestBlocker = { triggerTestBlocker() },
                         onTestQrBlocker = { sampleQr -> triggerQrBlockerTest(sampleQr) },
-                        onTestDebitOtp = { triggerDebitOtpTest() }
+                        onTestDebitOtp = { triggerDebitOtpTest() },
+                        onTestActiveCall = { triggerActiveCallTest() },
+                        onTestRemoteShare = { triggerRemoteScreenShareTest() }
                     )
                 }
             }
@@ -219,7 +230,8 @@ class MainActivity : ComponentActivity() {
         requestSmsPermissionLauncher.launch(
             arrayOf(
                 Manifest.permission.RECEIVE_SMS,
-                Manifest.permission.READ_SMS
+                Manifest.permission.READ_SMS,
+                Manifest.permission.READ_PHONE_STATE
             )
         )
     }
@@ -230,6 +242,66 @@ class MainActivity : ComponentActivity() {
             Uri.parse("package:$packageName")
         )
         startActivity(intent)
+    }
+
+    private fun triggerActiveCallTest() {
+        val testIntent = Intent(this, BlockOverlayService::class.java).apply {
+            putExtra(PaymentMonitorService.EXTRA_TARGET_PACKAGE, "com.google.android.apps.nbu.paisa.user")
+            putExtra(PaymentMonitorService.EXTRA_TARGET_APP_NAME, "Google Pay")
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TYPE, ThreatType.ACTIVE_PHONE_CALL.name)
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE, "CRITICAL ALERT: Active Phone Call in Progress")
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE_HI, "गंभीर चेतावनी: चालू फोन कॉल के दौरान पेमेंट का प्रयास")
+            putExtra(
+                PaymentMonitorService.EXTRA_THREAT_DESC,
+                "You are currently on a live phone call while opening a payment application. Cybercriminals keep victims on calls using urgency (fake electricity bills, customs, or bank freezes) to coerce them into authorizing UPI transfers."
+            )
+            putExtra(
+                PaymentMonitorService.EXTRA_THREAT_DESC_HI,
+                "आप इस समय फोन कॉल पर बात कर रहे हैं। जालसाज अक्सर बिजली बिल कटने, बैंक या पुलिस का डर दिखाकर कॉल पर रखते हुए दबाव में यूपीआई पिन डलवाते हैं।"
+            )
+            putExtra(
+                PaymentMonitorService.EXTRA_ACTION_GUIDE,
+                "Please disconnect your phone call first. Legitimate authorities never demand payments while keeping you on the phone."
+            )
+            putExtra(PaymentMonitorService.EXTRA_DETECTED_KEYWORD, "active_phone_call")
+            putExtra(PaymentMonitorService.EXTRA_FULL_TEXT, "Simulated call interception")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(testIntent)
+        } else {
+            startService(testIntent)
+        }
+    }
+
+    private fun triggerRemoteScreenShareTest() {
+        val testIntent = Intent(this, BlockOverlayService::class.java).apply {
+            putExtra(PaymentMonitorService.EXTRA_TARGET_PACKAGE, "com.google.android.apps.nbu.paisa.user")
+            putExtra(PaymentMonitorService.EXTRA_TARGET_APP_NAME, "Google Pay")
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TYPE, ThreatType.REMOTE_SCREEN_SHARE.name)
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE, "HIGH THREAT: Screen-Sharing App Active")
+            putExtra(PaymentMonitorService.EXTRA_THREAT_TITLE_HI, "खतरे की चेतावनी: स्क्रीन शेयरिंग ऐप सक्रिय पाई गई")
+            putExtra(
+                PaymentMonitorService.EXTRA_THREAT_DESC,
+                "The remote access tool 'AnyDesk Remote Desktop' is currently active on your device. Scammers use this to view your screen in real time, capture OTPs, and steal your UPI PIN."
+            )
+            putExtra(
+                PaymentMonitorService.EXTRA_THREAT_DESC_HI,
+                "आपके फोन में 'AnyDesk Remote Desktop' स्क्रीन शेयरिंग ऐप सक्रिय है। जालसाज इसके जरिए आपकी स्क्रीन और यूपीआई पिन देखकर पैसे निकाल सकते हैं।"
+            )
+            putExtra(PaymentMonitorService.EXTRA_OFFENDING_PACKAGE, "com.anydesk.anydeskandroid")
+            putExtra(PaymentMonitorService.EXTRA_OFFENDING_APP_NAME, "AnyDesk Remote Desktop")
+            putExtra(
+                PaymentMonitorService.EXTRA_ACTION_GUIDE,
+                "Tap below to open App Info and Force Stop or Uninstall AnyDesk Remote Desktop immediately."
+            )
+            putExtra(PaymentMonitorService.EXTRA_DETECTED_KEYWORD, "AnyDesk Remote Desktop")
+            putExtra(PaymentMonitorService.EXTRA_FULL_TEXT, "Simulated screen share interception")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(testIntent)
+        } else {
+            startService(testIntent)
+        }
     }
 
     private fun triggerDebitOtpTest() {
@@ -385,7 +457,9 @@ fun SetupScreen(
     onOpenAppInfo: () -> Unit,
     onTestBlocker: () -> Unit,
     onTestQrBlocker: (String) -> Unit,
-    onTestDebitOtp: () -> Unit
+    onTestDebitOtp: () -> Unit,
+    onTestActiveCall: () -> Unit,
+    onTestRemoteShare: () -> Unit
 ) {
     val isSystemProtected = hasOverlay && hasUsageAccess
     val isFullyGuarded = isSystemProtected && hasAccessibility && hasSmsAccess
@@ -932,6 +1006,47 @@ fun SetupScreen(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onTestActiveCall,
+                        modifier = Modifier.weight(1f),
+                        enabled = hasOverlay,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF991B1B)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "📞 Test Call Alert",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Button(
+                        onClick = onTestRemoteShare,
+                        modifier = Modifier.weight(1f),
+                        enabled = hasOverlay,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7F1D1D)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ScreenShare, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "🖥️ Test AnyDesk Alert",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

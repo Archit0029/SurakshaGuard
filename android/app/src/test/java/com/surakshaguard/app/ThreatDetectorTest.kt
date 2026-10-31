@@ -381,5 +381,49 @@ class ThreatDetectorTest {
     fun testMasterProtectionConstant_configuredProperly() {
         assertEquals("master_protection_enabled", PaymentMonitorService.KEY_MASTER_PROTECTION)
     }
+
+    @Test
+    fun testKnownRemoteTools_includesAnyDeskPluginsAndVysor() {
+        val packageNames = ThreatDetector.KNOWN_REMOTE_TOOLS.map { it.packageName }
+        assertTrue(packageNames.contains("com.anydesk.anydeskandroid"))
+        assertTrue(packageNames.contains("com.anydesk.adcontrol.ad1"))
+        assertTrue(packageNames.contains("com.anydesk.adcontrol.ad2"))
+        assertTrue(packageNames.contains("com.teamviewer.quicksupport.market"))
+        assertTrue(packageNames.contains("com.rustdesk.rustdesk"))
+        assertTrue(packageNames.contains("com.koushikdutta.vysor"))
+    }
+
+    @Test
+    fun testEvaluate_activeCallGeneratesBilingualWarning() {
+        val report = ThreatDetector.evaluate(
+            isDemoMode = false,
+            hasActiveCall = true,
+            activeRemoteApp = null,
+            isMirroringActive = false
+        )
+
+        assertEquals(ThreatType.ACTIVE_PHONE_CALL, report.type)
+        assertTrue(report.title.contains("Active Phone Call"))
+        assertTrue(report.titleHindi.contains("चालू फोन कॉल"))
+        assertTrue(report.description.contains("live phone call"))
+        assertTrue(report.descriptionHindi.contains("फोन कॉल पर बात कर रहे हैं"))
+        assertTrue(report.actionGuide.contains("disconnect your phone call"))
+    }
+
+    @Test
+    fun testEvaluate_remoteScreenShareGeneratesResolutionGuide() {
+        val tool = RemoteAppInfo("com.anydesk.anydeskandroid", "AnyDesk Remote Desktop")
+        val report = ThreatDetector.evaluate(
+            isDemoMode = false,
+            hasActiveCall = false,
+            activeRemoteApp = tool,
+            isMirroringActive = false
+        )
+
+        assertEquals(ThreatType.REMOTE_SCREEN_SHARE, report.type)
+        assertEquals("com.anydesk.anydeskandroid", report.offendingPackage)
+        assertEquals("AnyDesk Remote Desktop", report.offendingAppName)
+        assertTrue(report.actionGuide.contains("Uninstall AnyDesk Remote Desktop"))
+    }
 }
 

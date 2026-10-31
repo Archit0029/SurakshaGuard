@@ -36,6 +36,8 @@
 
         <!-- Known Remote Access & Screen-Sharing Tools -->
         <package android:name="com.anydesk.anydeskandroid" />
+        <package android:name="com.anydesk.adcontrol.ad1" />
+        <package android:name="com.anydesk.adcontrol.ad2" />
         <package android:name="com.teamviewer.quicksupport.market" />
         <package android:name="com.teamviewer.teamviewer.market.mobile" />
         <package android:name="com.sand.airdroid" />
@@ -43,6 +45,8 @@
         <package android:name="com.zoho.assist" />
         <package android:name="com.splashtop.remote" />
         <package android:name="com.logmein.rescuesupport" />
+        <package android:name="com.koushikdutta.vysor" />
+        <package android:name="com.realvnc.viewer.android" />
     </queries>
 
     <application
