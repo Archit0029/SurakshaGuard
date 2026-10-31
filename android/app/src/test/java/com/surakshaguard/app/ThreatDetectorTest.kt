@@ -141,6 +141,16 @@ class ThreatDetectorTest {
     }
 
     @Test
+    fun testQr_AnyDeskRemoteCoercion_flagsFraud() {
+        val scamQr = "upi://pay?pa=techsupport@upi&pn=Bank%20Support%20Desk&am=10&cu=INR&tn=Urgent%20AnyDesk%20Fee"
+        val analysis = QrThreatEngine.analyze(scamQr)
+
+        assertTrue("AnyDesk coercion QR must be flagged as fraud", analysis.isFraud)
+        assertEquals("REMOTE_ACCESS_COERCION", analysis.fraudType)
+        assertTrue(analysis.riskScore >= 50)
+    }
+
+    @Test
     fun testQr_CleanLegitimateMerchant_passesAsSafe() {
         val cleanQr = "upi://pay?pa=kirana-store@icici&pn=Sharma%20Kirana%20Store&mc=5411&am=250&cu=INR"
         val analysis = QrThreatEngine.analyze(cleanQr)
@@ -152,7 +162,8 @@ class ThreatDetectorTest {
 
     @Test
     fun testScreenText_GPayReversePaymentCashbackScam_flagsFraud() {
-        val gpayScreenText = "Paying GooglePay Cashback Reward scam@paytm ₹2,500.00 Claim Cashback and Receive Money to Bank"
+        // Even if scanner header "Scan any QR code" is in the view hierarchy, fraud keywords must trigger!
+        val gpayScreenText = "Scan any QR code Paying GooglePay Cashback Reward scam@paytm ₹2,500.00 Claim Cashback and Receive Money to Bank"
         val analysis = QrThreatEngine.analyzeScreenText(gpayScreenText)
 
         assertTrue("In-app cashback scam screen text must be flagged as fraud", analysis.isFraud)
@@ -162,8 +173,18 @@ class ThreatDetectorTest {
     }
 
     @Test
+    fun testScreenText_GPayAnyDeskRemoteCoercion_flagsFraud() {
+        val gpayScreenText = "Scan any QR code Paying Bank Support techsupport@upi ₹10.00 Urgent AnyDesk Fee"
+        val analysis = QrThreatEngine.analyzeScreenText(gpayScreenText)
+
+        assertTrue("In-app AnyDesk coercion screen text must be flagged as fraud", analysis.isFraud)
+        assertEquals("REMOTE_ACCESS_COERCION", analysis.fraudType)
+        assertTrue(analysis.riskScore >= 50)
+    }
+
+    @Test
     fun testScreenText_GPayFakeElectricityDiscom_flagsFraud() {
-        val gpayScreenText = "Paying BSES Electricity Discom fake-bill@ybl ₹4,999.00 Electricity Bill Due"
+        val gpayScreenText = "Scan any QR code Paying BSES Electricity Discom fake-bill@ybl ₹4,999.00 Electricity Bill Due Urgent"
         val analysis = QrThreatEngine.analyzeScreenText(gpayScreenText)
 
         assertTrue("In-app fake electricity discom screen text must be flagged as fraud", analysis.isFraud)

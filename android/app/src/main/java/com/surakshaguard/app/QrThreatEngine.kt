@@ -40,27 +40,54 @@ object QrThreatEngine {
     )
 
     // Markers that indicate user is browsing the home/navigation screen of a payment app
+    // Note: 'scan any qr' is strictly excluded because the scanner view itself displays that text!
     val HOME_SCREEN_INDICATORS = listOf(
-        "scan any qr", "scan qr code", "pay contacts", "pay phone number",
-        "bank transfer", "pay upi id", "self transfer", "pay bills",
-        "manage your money", "check bank balance", "see transaction history",
-        "to mobile number", "to bank/upi id", "to self account", "balance & history",
-        "recharge & pay bills", "scan & pay", "to upi apps", "to bank a/c",
-        "bills & recharges", "start a payment", "activate upi lite"
+        "pay contacts", "pay phone number", "bank transfer",
+        "pay upi id", "self transfer", "pay bills", "manage your money",
+        "check bank balance", "see transaction history", "to mobile number",
+        "to bank/upi id", "to self account", "balance & history", "bills & recharges"
     )
 
+    fun hasBlatantScamMarker(lowerText: String): Boolean {
+        // 1. Remote access keywords
+        val hasRemote = listOf("anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid").any { lowerText.contains(it) }
+        if (hasRemote) return true
+
+        // 2. Reverse payment bait compound phrases
+        val hasBait = REVERSE_PAYMENT_PATTERNS.any { lowerText.contains(it) }
+        if (hasBait) return true
+
+        // 3. Fake electricity / discom markers
+        val hasDiscom = lowerText.contains("discom") || lowerText.contains("bses") || lowerText.contains("uppcl")
+        val hasUrgentBill = lowerText.contains("electricity") && (lowerText.contains("bill due") || lowerText.contains("power cut") || lowerText.contains("disconnect"))
+        if (hasDiscom || hasUrgentBill) return true
+
+        // 4. Malicious redirect links
+        val hasBadUrl = SUSPICIOUS_URL_PATTERNS.any { lowerText.contains(it) }
+        if (hasBadUrl) return true
+
+        return false
+    }
+
     fun isHomeScreen(lowerText: String): Boolean {
+        // If a verified fraud pattern is on screen, it is NEVER an innocent home screen!
+        if (hasBlatantScamMarker(lowerText)) {
+            return false
+        }
         return HOME_SCREEN_INDICATORS.any { lowerText.contains(it) }
     }
 
     fun isPaymentScreen(lowerText: String, vpa: String): Boolean {
+        if (hasBlatantScamMarker(lowerText)) {
+            return true
+        }
         val paymentCues = listOf(
             "paying", "proceed to pay", "pay securely", "pay ₹", "pay to",
             "transfer to", "banking name", "add a note", "enter upi pin",
             "enter amount", "send money"
         )
         val hasCue = paymentCues.any { lowerText.contains(it) }
-        val hasPayWithAmount = (lowerText.contains("pay") || lowerText.contains("send")) &&
+        val hasPayWithAmount = (lowerText.contains("pay") || lowerText.contains("send") || lowerText.contains("to")) &&
                 (lowerText.contains("₹") || lowerText.contains("inr") || vpa.isNotBlank())
         return hasCue || hasPayWithAmount
     }
@@ -144,6 +171,15 @@ object QrThreatEngine {
             }
         }
 
+        // 5. Vector: Remote Desktop / Screen Coercion keyword in note or payee
+        val remoteTools = listOf("anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid")
+        val matchedRemote = remoteTools.filter { combinedText.contains(it) }
+        if (matchedRemote.isNotEmpty()) {
+            score += 70
+            fraudType = "REMOTE_ACCESS_COERCION"
+            flaggedReasons.add("QR code contains remote screen control keyword: ${matchedRemote.joinToString(", ")}")
+        }
+
         // Normalize score between 0 and 100
         val finalScore = score.coerceIn(0, 100)
         val isFraud = finalScore >= 50
@@ -183,6 +219,13 @@ object QrThreatEngine {
                 explanation = "This QR code contains an external redirect link ($urlParam) associated with malicious APK downloads or phishing portals."
                 explanationHindi = "इस क्यूआर कोड में एक छिपा हुआ लिंक है जो आपके फोन में संदिग्ध ऐप डाउनलोड करवा सकता है।"
                 advice = "Do not open any link and do not authorize this payment."
+            }
+            "REMOTE_ACCESS_COERCION" -> {
+                title = "HIGH THREAT: Remote Screen-Share Coercion Detected"
+                titleHindi = "खतरे की चेतावनी: रिमोट स्क्रीन शेयरिंग धोखाधड़ी"
+                explanation = "A remote access tool (AnyDesk/TeamViewer) keyword was detected in this QR payload. Scammers use remote tools to steal money."
+                explanationHindi = "इस क्यूआर कोड में रिमोट एक्सेस ऐप (जैसे AnyDesk) का संदर्भ पाया गया है। जालसाज इसके जरिए यूपीआई पिन चुराते हैं।"
+                advice = "Do NOT enter your UPI PIN. Disconnect any screen sharing immediately."
             }
             else -> {
                 if (isFraud) {
