@@ -61,12 +61,19 @@ flowchart TD
 
 ## ✨ Core Features & Defense Capabilities
 
-### 1. In-App Dynamic Screen Inspection (`PaymentMonitorService`)
+### 1. VPN-Style Master Sentinel Power Switch
+- **One-Tap Arm / Disarm:** Prominent, animated circular power button modeled after modern VPN applications (with pulsating neon emerald aura when active).
+- **Absolute Background Control:**
+  - **When ON:** Background engines (`PaymentMonitorService`, `SmsReceiver`, `UpiIntentInterceptorActivity`) actively monitor UPI payment windows, camera scans, and incoming bank debit OTPs.
+  - **When OFF:** All background monitoring is completely sleeping/paused. Payment apps, QR scans, and OTPs will pass normally without any interception.
+- **Real-Time Telemetry & Visual State:** Sensor status cards dynamically display whether the background sentinel is armed or paused.
+
+### 2. In-App Dynamic Screen Inspection (`PaymentMonitorService`)
 - Extends native Android `AccessibilityService` configured with `typeWindowStateChanged` and `typeWindowContentChanged`.
 - Performs recursive view tree traversal to read visible text nodes and content descriptions inside Google Pay, PhonePe, Paytm, and BHIM without requiring root.
 - Debounced with a 5-second cooldown to eliminate CPU waste and prevent duplicate triggers.
 
-### 2. Deep UPI & QR Threat Intelligence (`QrThreatEngine`)
+### 3. Deep UPI & QR Threat Intelligence (`QrThreatEngine`)
 - **Reverse-Payment Scam Detection:** Flags QRs disguised with keywords like `Cashback`, `Refund`, `Lottery`, `Prize`, `Reward`, `Winner`, or `Enter PIN to receive`. Reminds the user: *"In UPI, you never scan a QR or enter your PIN to receive money!"*
 - **Utility / Discom Impersonation Engine:** Detects payees claiming to be electricity boards (`BSES`, `UPPCL`, `TNEB`, `Discom`) that route money to private Peer-to-Peer VPAs (`@ybl`, `@okaxis`, `@okhdfcbank`, `@paytm`).
 - **Remote Access Coercion Check:** Detects `AnyDesk`, `TeamViewer`, `QuickSupport`, and `RustDesk` references embedded in notes or payee titles.

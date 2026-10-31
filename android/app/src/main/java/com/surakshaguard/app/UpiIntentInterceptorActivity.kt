@@ -29,6 +29,14 @@ class UpiIntentInterceptorActivity : Activity() {
         }
 
         val uriString = intentData.toString()
+
+        // 0. Master Protection Power Check: If user switched OFF, bypass interception and forward directly
+        if (!PaymentMonitorService.isMasterProtectionEnabled(this)) {
+            forwardToGenuinePaymentApp(intentData)
+            finish()
+            return
+        }
+
         val analysis = QrThreatEngine.analyze(uriString)
 
         if (analysis.isFraud) {

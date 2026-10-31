@@ -376,5 +376,10 @@ class ThreatDetectorTest {
         assertEquals("492014", DebitOtpEngine.extractOtpCode("Verification code: 492014"))
         assertEquals("392019", DebitOtpEngine.extractOtpCode("392019 is your secret OTP to approve"))
     }
+
+    @Test
+    fun testMasterProtectionConstant_configuredProperly() {
+        assertEquals("master_protection_enabled", PaymentMonitorService.KEY_MASTER_PROTECTION)
+    }
 }
 

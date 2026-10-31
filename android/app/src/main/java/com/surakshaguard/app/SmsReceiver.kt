@@ -29,6 +29,12 @@ class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
         if (context == null || intent == null) return
 
+        // 0. Master Protection Power Check: If user switched OFF, do not inspect or block
+        if (!PaymentMonitorService.isMasterProtectionEnabled(context)) {
+            Log.d(TAG, "Master Protection is OFF. Disarmed — ignoring incoming SMS.")
+            return
+        }
+
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
         val messages = try {
@@ -125,3 +131,4 @@ class SmsReceiver : BroadcastReceiver() {
         notificationManager.notify(NOTIFICATION_ID, builder.build())
     }
 }
+

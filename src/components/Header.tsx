@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Globe } from 'lucide-react';
+import { Shield, Globe, Power } from 'lucide-react';
 import type { InterceptionState } from '../types';
 import { getStateLabel } from '../engine/stateMachine';
 
@@ -7,15 +7,19 @@ interface HeaderProps {
   language: 'en' | 'hi';
   onToggleLanguage: () => void;
   interceptionState: InterceptionState;
+  isMasterProtectionEnabled: boolean;
+  onToggleMasterProtection: () => void;
 }
 
 /**
- * App header with SurakshaPay branding, state indicator, and language toggle.
+ * App header with SurakshaPay branding, VPN-style Master Shield switch, state indicator, and language toggle.
  */
 const Header: React.FC<HeaderProps> = ({
   language,
   onToggleLanguage,
   interceptionState,
+  isMasterProtectionEnabled,
+  onToggleMasterProtection,
 }) => {
   const stateLabel = getStateLabel(interceptionState);
   const isDanger =
@@ -29,9 +33,9 @@ const Header: React.FC<HeaderProps> = ({
         <div className="relative">
           <Shield
             className={`w-8 h-8 ${
-              isDanger ? 'text-red-500 animate-shield-pulse' : 'text-emerald-500'
+              isDanger ? 'text-red-500 animate-shield-pulse' : isMasterProtectionEnabled ? 'text-emerald-500' : 'text-slate-600'
             }`}
-            fill={isDanger ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.15)'}
+            fill={isDanger ? 'rgba(239,68,68,0.2)' : isMasterProtectionEnabled ? 'rgba(16,185,129,0.15)' : 'rgba(100,116,139,0.1)'}
           />
         </div>
         <div>
@@ -44,31 +48,51 @@ const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Center — State Indicator */}
-      <div
-        className={`hidden md:flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold
-          ${
-            isDanger
-              ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-              : interceptionState === 'LISTENING_ANALYZING'
-              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-              : interceptionState === 'TRANSACTION_PERMITTED'
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-              : 'bg-slate-800 text-slate-400 border border-slate-700'
+      {/* Center — State Indicator & VPN Power Switch */}
+      <div className="flex items-center gap-3">
+        {/* VPN Master Shield Power Button */}
+        <button
+          onClick={onToggleMasterProtection}
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-bold transition-all shadow-lg ${
+            isMasterProtectionEnabled
+              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 shadow-emerald-950/50 hover:bg-emerald-900/80'
+              : 'bg-red-950/80 text-red-300 border-red-500/50 shadow-red-950/50 hover:bg-red-900/80'
           }`}
-      >
-        <span
-          className={`w-2 h-2 rounded-full ${
-            isDanger
-              ? 'bg-red-500 animate-pulse'
-              : interceptionState === 'LISTENING_ANALYZING'
-              ? 'bg-amber-500 animate-pulse'
-              : interceptionState === 'TRANSACTION_PERMITTED'
-              ? 'bg-emerald-500'
-              : 'bg-slate-500'
-          }`}
-        />
-        {stateLabel}
+          title={isMasterProtectionEnabled ? "Click to Pause Background Sentinel" : "Click to Arm Background Sentinel"}
+        >
+          <Power className={`w-3.5 h-3.5 ${isMasterProtectionEnabled ? 'text-emerald-400 animate-pulse' : 'text-red-400'}`} />
+          <span>{isMasterProtectionEnabled ? 'SENTINEL: ON' : 'SENTINEL: OFF'}</span>
+        </button>
+
+        <div
+          className={`hidden md:flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold
+            ${
+              !isMasterProtectionEnabled
+                ? 'bg-slate-900 text-slate-400 border border-slate-700'
+                : isDanger
+                ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                : interceptionState === 'LISTENING_ANALYZING'
+                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                : interceptionState === 'TRANSACTION_PERMITTED'
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                : 'bg-slate-800 text-slate-400 border border-slate-700'
+            }`}
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              !isMasterProtectionEnabled
+                ? 'bg-slate-600'
+                : isDanger
+                ? 'bg-red-500 animate-pulse'
+                : interceptionState === 'LISTENING_ANALYZING'
+                ? 'bg-amber-500 animate-pulse'
+                : interceptionState === 'TRANSACTION_PERMITTED'
+                ? 'bg-emerald-500'
+                : 'bg-slate-500'
+            }`}
+          />
+          {!isMasterProtectionEnabled ? 'PROTECTION PAUSED' : stateLabel}
+        </div>
       </div>
 
       {/* Right — Language Toggle + Hackathon Badge */}

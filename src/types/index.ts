@@ -103,6 +103,7 @@ export interface AppState {
   isAnalyzing: boolean;
   showPinDialog: boolean;
   showLockOverlay: boolean;
+  isMasterProtectionEnabled: boolean;
 }
 
 /** Actions dispatched to the App reducer */
@@ -116,5 +117,6 @@ export type AppAction =
   | { type: 'PERMIT_TRANSACTION' }
   | { type: 'RESET' }
   | { type: 'TOGGLE_LANGUAGE' }
+  | { type: 'TOGGLE_MASTER_PROTECTION' }
   | { type: 'ADD_TIMELINE_EVENT'; event: TimelineEvent };
 

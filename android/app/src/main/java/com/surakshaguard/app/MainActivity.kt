@@ -11,11 +11,20 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.TextUtils
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +38,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -37,10 +47,12 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,9 +72,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -76,6 +91,7 @@ class MainActivity : ComponentActivity() {
     private var hasUsagePermission by mutableStateOf(false)
     private var hasAccessibilityPermission by mutableStateOf(false)
     private var hasSmsPermission by mutableStateOf(false)
+    private var isProtectionArmed by mutableStateOf(true)
     private var isDemoMode by mutableStateOf(false)
     private var isCallActive by mutableStateOf(false)
     private var detectedRemoteApp by mutableStateOf<RemoteAppInfo?>(null)
@@ -105,6 +121,8 @@ class MainActivity : ComponentActivity() {
                     color = Color(0xFF0A0A1A)
                 ) {
                     SetupScreen(
+                        isProtectionArmed = isProtectionArmed,
+                        onToggleMasterProtection = { toggleMasterProtection() },
                         hasOverlay = hasOverlayPermission,
                         hasUsageAccess = hasUsagePermission,
                         hasAccessibility = hasAccessibilityPermission,
@@ -140,6 +158,19 @@ class MainActivity : ComponentActivity() {
     private fun loadPreferences() {
         val prefs = getSharedPreferences(PaymentMonitorService.PREFS_NAME, Context.MODE_PRIVATE)
         isDemoMode = prefs.getBoolean(PaymentMonitorService.KEY_DEMO_MODE, false)
+        isProtectionArmed = PaymentMonitorService.isMasterProtectionEnabled(this)
+    }
+
+    private fun toggleMasterProtection() {
+        val newState = !isProtectionArmed
+        isProtectionArmed = newState
+        PaymentMonitorService.setMasterProtectionEnabled(this, newState)
+        val msg = if (newState) {
+            "🛡️ Suraksha Guard: Background Sentinel Armed & Active!"
+        } else {
+            "⚠️ Suraksha Guard: Background Sentinel Disarmed / Paused"
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
     }
 
     private fun saveDemoMode(enabled: Boolean) {
@@ -337,6 +368,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SetupScreen(
+    isProtectionArmed: Boolean,
+    onToggleMasterProtection: () -> Unit,
     hasOverlay: Boolean,
     hasUsageAccess: Boolean,
     hasAccessibility: Boolean,
@@ -390,12 +423,18 @@ fun SetupScreen(
             Icon(
                 imageVector = Icons.Default.Security,
                 contentDescription = null,
-                tint = if (isFullyGuarded) Color(0xFF10B981) else if (isSystemProtected) Color(0xFF38BDF8) else Color(0xFFF59E0B),
+                tint = if (!isProtectionArmed) Color(0xFFEF4444) else if (isFullyGuarded) Color(0xFF10B981) else if (isSystemProtected) Color(0xFF38BDF8) else Color(0xFFF59E0B),
                 modifier = Modifier.size(36.dp)
             )
         }
 
         Spacer(modifier = Modifier.height(2.dp))
+
+        // ── VPN-Style Master Power Switch Hero Section ──
+        VpnPowerHeroCard(
+            isArmed = isProtectionArmed,
+            onToggle = onToggleMasterProtection
+        )
 
         // System Protection Status Badge Card
         Card(
@@ -403,11 +442,11 @@ fun SetupScreen(
                 .fillMaxWidth()
                 .border(
                     1.dp,
-                    if (isFullyGuarded) Color(0xFF059669) else if (isSystemProtected) Color(0xFF0284C7) else Color(0xFFD97706),
+                    if (!isProtectionArmed) Color(0xFFEF4444) else if (isFullyGuarded) Color(0xFF059669) else if (isSystemProtected) Color(0xFF0284C7) else Color(0xFFD97706),
                     RoundedCornerShape(16.dp)
                 ),
             colors = CardDefaults.cardColors(
-                containerColor = if (isFullyGuarded) Color(0xFF06281E) else if (isSystemProtected) Color(0xFF0B1E2E) else Color(0xFF2E1B05)
+                containerColor = if (!isProtectionArmed) Color(0xFF260D12) else if (isFullyGuarded) Color(0xFF06281E) else if (isSystemProtected) Color(0xFF0B1E2E) else Color(0xFF2E1B05)
             ),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -418,9 +457,9 @@ fun SetupScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (isFullyGuarded) Icons.Default.CheckCircle else if (isSystemProtected) Icons.Default.Security else Icons.Default.Warning,
+                    imageVector = if (!isProtectionArmed) Icons.Default.Warning else if (isFullyGuarded) Icons.Default.CheckCircle else if (isSystemProtected) Icons.Default.Security else Icons.Default.Warning,
                     contentDescription = null,
-                    tint = if (isFullyGuarded) Color(0xFF34D399) else if (isSystemProtected) Color(0xFF38BDF8) else Color(0xFFFBBF24),
+                    tint = if (!isProtectionArmed) Color(0xFFEF4444) else if (isFullyGuarded) Color(0xFF34D399) else if (isSystemProtected) Color(0xFF38BDF8) else Color(0xFFFBBF24),
                     modifier = Modifier.size(32.dp)
                 )
 
@@ -429,11 +468,13 @@ fun SetupScreen(
                 Column {
                     Text(
                         text = when {
+                            !isProtectionArmed -> "⚠️ SENTINEL DISARMED (POWER OFF)"
                             isFullyGuarded -> "100% COMPLETE PROTECTION ARMED"
                             isSystemProtected -> "CORE PROTECTION ARMED"
                             else -> "SETUP REQUIRED"
                         },
                         color = when {
+                            !isProtectionArmed -> Color(0xFFEF4444)
                             isFullyGuarded -> Color(0xFF34D399)
                             isSystemProtected -> Color(0xFF38BDF8)
                             else -> Color(0xFFFBBF24)
@@ -444,6 +485,7 @@ fun SetupScreen(
                     )
                     Text(
                         text = when {
+                            !isProtectionArmed -> "The Master Power switch is OFF. Background services are sleeping and will NOT intercept payment apps or OTPs until re-armed."
                             isFullyGuarded -> if (isDemoMode)
                                 "Demo Mode active: Payment apps will be blocked for testing."
                             else
@@ -535,38 +577,49 @@ fun SetupScreen(
                 SensorRow(
                     icon = Icons.Default.Call,
                     title = "Active Phone Call Sensor",
-                    statusText = if (isCallActive) "CALL IN PROGRESS (HIGH RISK)" else "IDLE / SAFE",
-                    isSafe = !isCallActive
+                    statusText = if (!isProtectionArmed)
+                        "PAUSED (Power Switch OFF)"
+                    else if (isCallActive)
+                        "CALL IN PROGRESS (HIGH RISK)"
+                    else
+                        "IDLE / SAFE",
+                    isSafe = isProtectionArmed && !isCallActive
                 )
 
                 SensorRow(
                     icon = Icons.AutoMirrored.Filled.ScreenShare,
                     title = "Remote Screen-Share Sensor",
-                    statusText = if (detectedRemoteApp != null)
+                    statusText = if (!isProtectionArmed)
+                        "PAUSED (Power Switch OFF)"
+                    else if (detectedRemoteApp != null)
                         "DETECTED: ${detectedRemoteApp.displayName}"
                     else
                         "NO REMOTE TOOLS (SAFE)",
-                    isSafe = detectedRemoteApp == null
+                    isSafe = isProtectionArmed && detectedRemoteApp == null
                 )
 
                 SensorRow(
                     icon = Icons.Default.QrCodeScanner,
                     title = "In-App Payment QR Sentinel",
-                    statusText = if (hasAccessibility)
+                    statusText = if (!isProtectionArmed)
+                        "PAUSED (Power Switch OFF)"
+                    else if (hasAccessibility)
                         "ACTIVE (Google Pay / PhonePe Shielded)"
                     else
                         "INACTIVE (Enable Permission #3)",
-                    isSafe = hasAccessibility
+                    isSafe = isProtectionArmed && hasAccessibility
                 )
 
                 SensorRow(
                     icon = Icons.Default.Sms,
                     title = "Debit OTP Fraud Shield",
-                    statusText = if (hasSmsAccess)
+                    statusText = if (!isProtectionArmed)
+                        "PAUSED (Power Switch OFF)"
+                    else if (hasSmsAccess)
                         "ACTIVE (Real-Time Bank SMS Guarded)"
                     else
                         "INACTIVE (Enable Permission #4)",
-                    isSafe = hasSmsAccess
+                    isSafe = isProtectionArmed && hasSmsAccess
                 )
             }
         }
@@ -881,6 +934,195 @@ fun SetupScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun VpnPowerHeroCard(
+    isArmed: Boolean,
+    onToggle: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "vpnPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.70f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.5.dp,
+                brush = if (isArmed) {
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF10B981), Color(0xFF042F2C), Color(0xFF021712))
+                    )
+                } else {
+                    Brush.verticalGradient(
+                        listOf(Color(0xFFEF4444), Color(0xFF3B1219), Color(0xFF17080B))
+                    )
+                },
+                shape = RoundedCornerShape(24.dp)
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isArmed) Color(0xFF081F1A) else Color(0xFF180A0E)
+        ),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 24.dp, horizontal = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Status Pill (VPN Style)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        if (isArmed) Color(0xFF064E3B) else Color(0xFF451A03)
+                    )
+                    .border(
+                        1.dp,
+                        if (isArmed) Color(0xFF10B981) else Color(0xFFEF4444),
+                        RoundedCornerShape(20.dp)
+                    )
+                    .padding(horizontal = 14.dp, vertical = 5.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (isArmed) Color(0xFF34D399) else Color(0xFFEF4444))
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (isArmed) "SENTINEL ARMED & GUARDING" else "SENTINEL DISARMED / SLEEPING",
+                        color = if (isArmed) Color(0xFFA7F3D0) else Color(0xFFFCA5A5),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.8.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Large Circular VPN-Style Power Button
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(150.dp)
+            ) {
+                // Outer Pulsing Glow Aura (only animates when armed)
+                Box(
+                    modifier = Modifier
+                        .size(150.dp)
+                        .scale(if (isArmed) pulseScale else 1.0f)
+                        .clip(CircleShape)
+                        .background(
+                            if (isArmed) {
+                                Color(0xFF10B981).copy(alpha = pulseAlpha * 0.35f)
+                            } else {
+                                Color(0xFFEF4444).copy(alpha = 0.12f)
+                            }
+                        )
+                )
+
+                // Middle Ring
+                Box(
+                    modifier = Modifier
+                        .size(134.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isArmed) Color(0xFF042F2C) else Color(0xFF200C11)
+                        )
+                        .border(
+                            2.dp,
+                            if (isArmed) Color(0xFF10B981).copy(alpha = 0.5f) else Color(0xFFEF4444).copy(alpha = 0.4f),
+                            CircleShape
+                        )
+                )
+
+                // Inner Main Circular Power Switch
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(116.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isArmed) {
+                                Brush.radialGradient(
+                                    listOf(Color(0xFF059669), Color(0xFF064E3B), Color(0xFF022C22))
+                                )
+                            } else {
+                                Brush.radialGradient(
+                                    listOf(Color(0xFF3B1219), Color(0xFF260D12), Color(0xFF17080B))
+                                )
+                            }
+                        )
+                        .border(
+                            3.dp,
+                            if (isArmed) Color(0xFF34D399) else Color(0xFFEF4444),
+                            CircleShape
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = rememberRipple(bounded = true, radius = 58.dp),
+                            onClick = onToggle
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PowerSettingsNew,
+                        contentDescription = if (isArmed) "Disarm Protection" else "Arm Protection",
+                        tint = if (isArmed) Color.White else Color(0xFFF87171),
+                        modifier = Modifier.size(54.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Title & Instruction
+            Text(
+                text = if (isArmed) "PROTECTION IS ACTIVE" else "PROTECTION IS PAUSED",
+                color = if (isArmed) Color.White else Color(0xFFFCA5A5),
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = if (isArmed)
+                    "Tap button to pause background monitoring. When armed, Google Pay, PhonePe, Paytm & bank debit OTPs are guarded."
+                else
+                    "Tap button to arm background monitoring. While paused, payment apps and OTPs will NOT be intercepted.",
+                color = Color(0xFF94A3B8),
+                fontSize = 11.5.sp,
+                lineHeight = 16.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
         }
     }
 }

@@ -57,6 +57,7 @@ const initialState: AppState = {
   isAnalyzing: false,
   showPinDialog: false,
   showLockOverlay: false,
+  isMasterProtectionEnabled: true,
 };
 
 // ── Reducer ──────────────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...initialState,
         language: state.language,
+        isMasterProtectionEnabled: state.isMasterProtectionEnabled,
         currentScenario: action.scenario,
         timeline: [
           createEvent(
@@ -187,12 +189,29 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...initialState,
         language: state.language,
+        isMasterProtectionEnabled: state.isMasterProtectionEnabled,
       };
 
     case 'TOGGLE_LANGUAGE':
       return {
         ...state,
         language: state.language === 'en' ? 'hi' : 'en',
+      };
+
+    case 'TOGGLE_MASTER_PROTECTION':
+      const newProtectionState = !state.isMasterProtectionEnabled;
+      return {
+        ...state,
+        isMasterProtectionEnabled: newProtectionState,
+        timeline: [
+          ...state.timeline,
+          createEvent(
+            newProtectionState ? 'success' : 'warning',
+            newProtectionState
+              ? '🛡️ Master Sentinel Armed — Live background UPI interception active'
+              : '⚠️ Master Sentinel Disarmed — Background monitoring paused, scam protection disabled'
+          ),
+        ],
       };
 
     case 'ADD_TIMELINE_EVENT':
@@ -249,18 +268,17 @@ const App: React.FC = () => {
     // Pre-authorization gate check
     setTimeout(() => {
       if (
+        state.isMasterProtectionEnabled &&
         state.riskBreakdown &&
         state.riskBreakdown.totalScore > CRITICAL_THRESHOLD
       ) {
         dispatch({ type: 'FREEZE_TRANSACTION' });
       } else {
-        // For low-risk: the UPI screen will show PIN entry,
-        // and on PIN completion it will call handlePay again
-        // which triggers PERMIT_TRANSACTION
+        // If master protection is OFF or risk is low, payment proceeds directly
         dispatch({ type: 'PERMIT_TRANSACTION' });
       }
     }, 800);
-  }, [state.riskBreakdown]);
+  }, [state.isMasterProtectionEnabled, state.riskBreakdown]);
 
   // ── Lock Overlay Actions ───────────────────────────────────────────
   const handleAbort = useCallback(() => {
@@ -281,12 +299,19 @@ const App: React.FC = () => {
     dispatch({ type: 'TOGGLE_LANGUAGE' });
   }, []);
 
+  // ── Master Protection Power Toggle ─────────────────────────────────
+  const handleToggleMasterProtection = useCallback(() => {
+    dispatch({ type: 'TOGGLE_MASTER_PROTECTION' });
+  }, []);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header
         language={state.language}
         onToggleLanguage={handleToggleLanguage}
         interceptionState={state.interceptionState}
+        isMasterProtectionEnabled={state.isMasterProtectionEnabled}
+        onToggleMasterProtection={handleToggleMasterProtection}
       />
 
       <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 overflow-hidden">

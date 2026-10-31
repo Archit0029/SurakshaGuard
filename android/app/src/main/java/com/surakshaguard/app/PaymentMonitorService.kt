@@ -25,6 +25,21 @@ class PaymentMonitorService : AccessibilityService() {
 
         const val PREFS_NAME = "suraksha_prefs"
         const val KEY_DEMO_MODE = "demo_mode_enabled"
+        const val KEY_MASTER_PROTECTION = "master_protection_enabled"
+
+        /**
+         * Checks if the master VPN-style power switch is active.
+         * When false, all background monitoring, SMS interception, and QR blocking are disarmed.
+         */
+        fun isMasterProtectionEnabled(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getBoolean(KEY_MASTER_PROTECTION, true)
+        }
+
+        fun setMasterProtectionEnabled(context: Context, enabled: Boolean) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().putBoolean(KEY_MASTER_PROTECTION, enabled).apply()
+        }
 
         const val EXTRA_REASON = "EXTRA_REASON"
         const val EXTRA_TARGET_PACKAGE = "EXTRA_TARGET_PACKAGE"
@@ -114,6 +129,11 @@ class PaymentMonitorService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+
+        // 0. Master Protection Power Check: If user switched OFF, do not inspect or block
+        if (!isMasterProtectionEnabled(this)) {
+            return
+        }
 
         val pkgName = event.packageName?.toString() ?: return
 
