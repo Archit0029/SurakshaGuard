@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production & Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Gradle & Android build files
+.gradle/
+build/
+**/build/
+*.iml
+.idea/
+local.properties
+.cxx/
+captures/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+.vscode/
+
+# Keep root release APK if desired
+*.apk
+!SurakshaGuard.apk
+

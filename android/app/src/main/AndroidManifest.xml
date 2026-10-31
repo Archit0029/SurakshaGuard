@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Permission to draw emergency blocking overlay over applications -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Foreground Service permissions for background protection -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Official Android Security & AppLock API to detect foreground UPI payment windows -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
+    <!-- Notification permission for Android 13+ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Package visibility queries for target UPI apps and remote screen-sharing tools -->
+    <queries>
+        <!-- Target UPI apps -->
+        <package android:name="com.google.android.apps.nbu.paisa.user" />
+        <package android:name="net.one97.paytm" />
+        <package android:name="com.phonepe.app" />
+        <package android:name="in.org.npci.upiapp" />
+        <package android:name="com.cred.club" />
+
+        <!-- Known Remote Access & Screen-Sharing Tools -->
+        <package android:name="com.anydesk.anydeskandroid" />
+        <package android:name="com.teamviewer.quicksupport.market" />
+        <package android:name="com.teamviewer.teamviewer.market.mobile" />
+        <package android:name="com.sand.airdroid" />
+        <package android:name="com.rustdesk.rustdesk" />
+        <package android:name="com.zoho.assist" />
+        <package android:name="com.splashtop.remote" />
+        <package android:name="com.logmein.rescuesupport" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_shield_alert"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/ic_shield_alert"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SurakshaGuard"
+        tools:targetApi="34">
+
+        <!-- Setup UI & Permissions Onboarding Activity -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.SurakshaGuard">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Background Payment Window Sentinel Monitor Service -->
+        <service
+            android:name=".PaymentMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Real-time payment window monitoring to prevent social engineering fraud" />
+        </service>
+
+        <!-- Dynamic Blocking Overlay Service (TYPE_APPLICATION_OVERLAY) -->
+        <service
+            android:name=".BlockOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Emergency full-screen payment fraud deterrence overlay" />
+        </service>
+
+    </application>
+
+</manifest>

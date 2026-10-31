@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SurakshaGuard</string>
+    <string name="accessibility_service_label">SurakshaGuard Payment Monitor</string>
+    <string name="accessibility_service_description">Monitors when payment apps (Google Pay, PhonePe, Paytm) open to physically block unauthorized or coerced transactions in suspicious environments.</string>
+</resources>
