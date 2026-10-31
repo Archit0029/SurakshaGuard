@@ -184,12 +184,13 @@ class ThreatDetectorTest {
 
     @Test
     fun testScreenText_GPayHomeScreen_passesAsClean() {
-        val homeScreenText = "Scan any QR code Pay contacts Pay phone number Bank transfer Pay UPI ID Self transfer Pay bills Electricity DTH Mobile Recharge Manage your money Rewards Offers Referrals user@okhdfcbank"
+        val homeScreenText = "Scan any QR code Pay contacts Pay phone number Bank transfer Pay UPI ID Self transfer Pay bills Electricity DTH Mobile Recharge Manage your money Rewards Offers Referrals Earn Cashback with friends user@okhdfcbank"
         val analysis = QrThreatEngine.analyzeScreenText(homeScreenText)
 
-        assertFalse("Google Pay home screen with rewards & electricity icons must NEVER be flagged as fraud", analysis.isFraud)
+        assertFalse("Google Pay home screen with rewards, offers & cashback banner must NEVER be flagged as fraud", analysis.isFraud)
         assertEquals("SAFE", analysis.riskLevel)
         assertEquals(0, analysis.riskScore)
+        assertTrue("isHomeScreen helper must return true for GPay home screen", QrThreatEngine.isHomeScreen(homeScreenText.lowercase()))
     }
 
     @Test
@@ -212,8 +213,7 @@ class ThreatDetectorTest {
         val matchedBait = PaymentMonitorService.FRAUD_BAIT_TRIGGERS.filter { lower.contains(it) }
 
         assertTrue("Must detect 'enter pin to receive'", matchedBait.contains("enter pin to receive"))
-        assertTrue("Must detect 'cashback'", matchedBait.contains("cashback"))
-        assertTrue("Must detect 'lottery'", matchedBait.contains("lottery"))
+        assertTrue("Must detect 'cashback lottery'", matchedBait.contains("cashback lottery"))
     }
 
     @Test

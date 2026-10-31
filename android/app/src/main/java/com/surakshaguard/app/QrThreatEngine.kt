@@ -40,10 +40,39 @@ object QrThreatEngine {
     )
 
     // Markers that indicate user is browsing the home/navigation screen of a payment app
-    private val HOME_SCREEN_INDICATORS = listOf(
-        "scan any qr", "scan qr code", "check bank balance",
-        "see transaction history", "manage your money",
-        "to bank/upi id", "to self account"
+    val HOME_SCREEN_INDICATORS = listOf(
+        "scan any qr", "scan qr code", "pay contacts", "pay phone number",
+        "bank transfer", "pay upi id", "self transfer", "pay bills",
+        "manage your money", "check bank balance", "see transaction history",
+        "to mobile number", "to bank/upi id", "to self account", "balance & history",
+        "recharge & pay bills", "scan & pay", "to upi apps", "to bank a/c",
+        "bills & recharges", "start a payment", "activate upi lite"
+    )
+
+    fun isHomeScreen(lowerText: String): Boolean {
+        return HOME_SCREEN_INDICATORS.any { lowerText.contains(it) }
+    }
+
+    fun isPaymentScreen(lowerText: String, vpa: String): Boolean {
+        val paymentCues = listOf(
+            "paying", "proceed to pay", "pay securely", "pay ₹", "pay to",
+            "transfer to", "banking name", "add a note", "enter upi pin",
+            "enter amount", "send money"
+        )
+        val hasCue = paymentCues.any { lowerText.contains(it) }
+        val hasPayWithAmount = (lowerText.contains("pay") || lowerText.contains("send")) &&
+                (lowerText.contains("₹") || lowerText.contains("inr") || vpa.isNotBlank())
+        return hasCue || hasPayWithAmount
+    }
+
+    // High-confidence compound reverse payment fraud patterns for on-screen inspection
+    val REVERSE_PAYMENT_PATTERNS = listOf(
+        "enter pin to receive", "pin to receive", "pin to get", "receive money",
+        "claim cashback", "cashback claim", "receive cashback", "cashback reward",
+        "cashback lottery", "claim refund", "refund claim", "refund verification",
+        "prize claim", "claim prize", "lottery winner", "lucky draw winner",
+        "claim bonus", "claim subsidy", "paying cashback", "paying refund",
+        "paying reward", "paying lottery", "to cashback", "to refund"
     )
 
     // Suspicious URL indicators inside the UPI `url` parameter
@@ -196,22 +225,8 @@ object QrThreatEngine {
     fun analyzeScreenText(screenText: String): QrThreatAnalysis {
         val lowerText = screenText.lowercase()
 
-        // Critical social engineering and fraud bait keywords
-        val hasDirectScamKeyword = lowerText.contains("anydesk") ||
-                lowerText.contains("teamviewer") ||
-                lowerText.contains("quicksupport") ||
-                lowerText.contains("rustdesk") ||
-                lowerText.contains("enter pin to receive") ||
-                lowerText.contains("cashback") ||
-                lowerText.contains("refund") ||
-                lowerText.contains("lottery") ||
-                lowerText.contains("bijli") ||
-                lowerText.contains("power cut") ||
-                lowerText.contains("disconnect")
-
-        // 1. If browsing home screen AND no explicit scam keywords are present, evaluate as safe
-        val isHomeScreen = HOME_SCREEN_INDICATORS.any { lowerText.contains(it) }
-        if (isHomeScreen && !hasDirectScamKeyword) {
+        // 1. Critical Home Screen Guard: If on home / dashboard screen, NEVER flag as fraud!
+        if (isHomeScreen(lowerText)) {
             return QrThreatAnalysis(
                 isFraud = false,
                 riskScore = 0,
@@ -234,23 +249,8 @@ object QrThreatEngine {
         val payeeName = extractPayeeNameFallback(screenText, vpa)
         val lowerPayee = payeeName.lowercase()
 
-        // 2. Active payment intent checks
-        val hasPaymentIntent = hasDirectScamKeyword ||
-                lowerText.contains("paying") ||
-                lowerText.contains("pay ₹") ||
-                lowerText.contains("pay to") ||
-                lowerText.contains("proceed to pay") ||
-                lowerText.contains("pay securely") ||
-                lowerText.contains("transfer to") ||
-                lowerText.contains("send money") ||
-                lowerText.contains("banking name") ||
-                lowerText.contains("add a note") ||
-                lowerText.contains("upi id") ||
-                lowerText.contains("enter upi pin") ||
-                vpa.isNotBlank() ||
-                lowerText.contains("₹")
-
-        if (!hasPaymentIntent) {
+        // 2. Must be on an active payment / checkout screen
+        if (!isPaymentScreen(lowerText, vpa)) {
             return QrThreatAnalysis(
                 isFraud = false,
                 riskScore = 0,
@@ -273,7 +273,7 @@ object QrThreatEngine {
         var fraudType = "UNKNOWN"
 
         // 3. Vector: Reverse Payment / Cashback / Refund scam inside Google Pay
-        val matchedReverseKeywords = REVERSE_PAYMENT_KEYWORDS.filter {
+        val matchedReverseKeywords = REVERSE_PAYMENT_PATTERNS.filter {
             lowerPayee.contains(it) || lowerText.contains(it)
         }
         if (matchedReverseKeywords.isNotEmpty()) {
@@ -282,7 +282,16 @@ object QrThreatEngine {
             flaggedReasons.add("Deceptive 'Cashback / Refund / Prize' keywords in payment details: ${matchedReverseKeywords.joinToString(", ")}")
         }
 
-        // 4. Vector: Fake Electricity / Utility Impersonation
+        // 4. Vector: Remote Desktop / Screen Coercion on payment checkout screen
+        val remoteTools = listOf("anydesk", "teamviewer", "quicksupport", "rustdesk")
+        val matchedRemote = remoteTools.filter { lowerText.contains(it) }
+        if (matchedRemote.isNotEmpty()) {
+            score += 70
+            fraudType = "REMOTE_ACCESS_COERCION"
+            flaggedReasons.add("Remote desktop keyword detected on payment checkout screen: ${matchedRemote.joinToString(", ")}")
+        }
+
+        // 5. Vector: Fake Electricity / Utility Impersonation
         val matchedImpersonation = IMPERSONATION_KEYWORDS.filter {
             lowerPayee.contains(it) || lowerText.contains(it)
         }
@@ -298,7 +307,7 @@ object QrThreatEngine {
             }
         }
 
-        // 5. Vector: Suspicious high-risk URL or APK references in payment notes
+        // 6. Vector: Suspicious high-risk URL or APK references in payment notes
         val matchedUrl = SUSPICIOUS_URL_PATTERNS.filter { lowerText.contains(it) }
         if (matchedUrl.isNotEmpty()) {
             score += 60
@@ -336,6 +345,13 @@ object QrThreatEngine {
                 explanation = "This payment is labeled as a utility or bill payment, but points to an individual private account (${if (vpa.isNotBlank()) vpa else "unverified person"}). Fraudsters use fake electricity QR codes to steal bill payments."
                 explanationHindi = "यह पेमेंट किसी बिजली विभाग के नाम पर दिख रहा है, लेकिन पैसे एक अज्ञात निजी खाते में जा रहे हैं। यह एक फर्जी बिजली बिल पेमेंट जालसाजी है।"
                 advice = "Pay electricity and utility bills only through verified official portals or discom apps."
+            }
+            "REMOTE_ACCESS_COERCION" -> {
+                title = "HIGH THREAT: Remote Screen-Share Coercion Detected"
+                titleHindi = "खतरे की चेतावनी: रिमोट स्क्रीन शेयरिंग धोखाधड़ी"
+                explanation = "A remote access tool (AnyDesk/TeamViewer) keyword was detected on your transaction screen. Scammers use remote tools to steal money."
+                explanationHindi = "आपके पेमेंट स्क्रीन पर रिमोट एक्सेस ऐप का संदर्भ पाया गया है। जालसाज ऐसे ऐप्स के जरिए यूपीआई पिन चुराते हैं।"
+                advice = "Do NOT enter your UPI PIN. Disconnect any screen sharing immediately."
             }
             else -> {
                 if (isFraud) {

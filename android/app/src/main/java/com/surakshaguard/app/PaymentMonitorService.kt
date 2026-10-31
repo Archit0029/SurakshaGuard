@@ -61,12 +61,8 @@ class PaymentMonitorService : AccessibilityService() {
             "anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid", "screen share"
         )
 
-        // 3. Fraud bait & reverse-payment triggers
-        val FRAUD_BAIT_TRIGGERS = listOf(
-            "enter pin to receive", "cashback", "lottery", "refund", "reward",
-            "prize", "bonus", "winner", "claim", "receive money", "pin to get",
-            "gift voucher", "subsidy", "lucky draw"
-        )
+        // 3. Fraud bait & reverse-payment triggers (compound phrases to avoid matching native UI tabs like 'Rewards')
+        val FRAUD_BAIT_TRIGGERS = QrThreatEngine.REVERSE_PAYMENT_PATTERNS
 
         // 4. Authority & Fake support impersonation triggers
         val IMPERSONATION_TRIGGERS = listOf(
@@ -121,6 +117,17 @@ class PaymentMonitorService : AccessibilityService() {
 
         // 3. Heuristic & Deep QR Threat Detection: Normalize to lowercase
         val lowerText = fullScreenText.lowercase()
+
+        // CRITICAL GUARD 1: If user is on the home/navigation screen, NEVER evaluate or intercept!
+        if (QrThreatEngine.isHomeScreen(lowerText)) {
+            return
+        }
+
+        // CRITICAL GUARD 2: Must be on an active payment checkout screen
+        val vpa = QrThreatEngine.extractVpaFallback(fullScreenText)
+        if (!isDemoMode && !QrThreatEngine.isPaymentScreen(lowerText, vpa)) {
+            return
+        }
 
         // Evaluate screen contents through QrThreatEngine intelligence
         val qrAnalysis = QrThreatEngine.analyzeScreenText(fullScreenText)
