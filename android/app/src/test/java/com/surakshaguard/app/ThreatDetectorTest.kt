@@ -183,6 +183,16 @@ class ThreatDetectorTest {
     }
 
     @Test
+    fun testScreenText_GPayHomeScreen_passesAsClean() {
+        val homeScreenText = "Scan any QR code Pay contacts Pay phone number Bank transfer Pay UPI ID Self transfer Pay bills Electricity DTH Mobile Recharge Manage your money Rewards Offers Referrals user@okhdfcbank"
+        val analysis = QrThreatEngine.analyzeScreenText(homeScreenText)
+
+        assertFalse("Google Pay home screen with rewards & electricity icons must NEVER be flagged as fraud", analysis.isFraud)
+        assertEquals("SAFE", analysis.riskLevel)
+        assertEquals(0, analysis.riskScore)
+    }
+
+    @Test
     fun testMultiplePermutations_cleanStateAlwaysPasses() {
         // Run clean check 100 times to guarantee consistency
         for (i in 1..100) {

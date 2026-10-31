@@ -39,6 +39,15 @@ object QrThreatEngine {
         "customer care", "customercare", "helpline", "support desk", "helpdesk"
     )
 
+    // Markers that indicate user is browsing the home/navigation screen of a payment app
+    private val HOME_SCREEN_INDICATORS = listOf(
+        "scan any qr", "scan qr code", "check bank balance", "check balance",
+        "see transaction history", "transaction history", "pay phone number",
+        "pay contacts", "bank transfer", "pay bills", "manage your money",
+        "recharge & pay bills", "to mobile number", "to bank/upi id",
+        "to self account", "balance & history", "explore"
+    )
+
     // Suspicious URL indicators inside the UPI `url` parameter
     private val SUSPICIOUS_URL_PATTERNS = listOf(
         "bit.ly", "tinyurl.com", "is.gd", "t.co", "cutt.ly", "rb.gy", "shorturl.at",
@@ -188,37 +197,83 @@ object QrThreatEngine {
      */
     fun analyzeScreenText(screenText: String): QrThreatAnalysis {
         val lowerText = screenText.lowercase()
+
+        // 1. If on home/browse screen, NEVER evaluate as a payment checkout
+        val isHomeScreen = HOME_SCREEN_INDICATORS.any { lowerText.contains(it) }
+        if (isHomeScreen) {
+            return QrThreatAnalysis(
+                isFraud = false,
+                riskScore = 0,
+                riskLevel = "SAFE",
+                fraudType = "NONE",
+                title = "SAFE: Home Screen",
+                titleHindi = "सुरक्षित: होम स्क्रीन",
+                explanation = "Browsing home navigation screen.",
+                explanationHindi = "सामान्य नेविगेशन स्क्रीन।",
+                payeeVpa = "",
+                payeeName = "",
+                requestedAmount = null,
+                flaggedPatterns = emptyList(),
+                actionAdvice = ""
+            )
+        }
+
+        // 2. Must have active payment intent (user scanned a QR or entered payment flow)
+        val hasPaymentIntent = lowerText.contains("paying") ||
+                lowerText.contains("pay ₹") ||
+                lowerText.contains("pay to") ||
+                lowerText.contains("proceed to pay") ||
+                lowerText.contains("pay securely") ||
+                lowerText.contains("transfer to")
+
+        if (!hasPaymentIntent) {
+            return QrThreatAnalysis(
+                isFraud = false,
+                riskScore = 0,
+                riskLevel = "SAFE",
+                fraudType = "NONE",
+                title = "SAFE: Browsing",
+                titleHindi = "सुरक्षित: ब्राउज़िंग",
+                explanation = "No active payment transaction.",
+                explanationHindi = "कोई सक्रिय भुगतान नहीं।",
+                payeeVpa = "",
+                payeeName = "",
+                requestedAmount = null,
+                flaggedPatterns = emptyList(),
+                actionAdvice = ""
+            )
+        }
+
         val vpa = extractVpaFallback(screenText)
         val amount = extractAmountFallback(screenText)
         val payeeName = extractPayeeNameFallback(screenText, vpa)
+        val lowerPayee = payeeName.lowercase()
 
         val flaggedReasons = mutableListOf<String>()
         var score = 0
         var fraudType = "UNKNOWN"
 
-        // 1. Vector: Reverse Payment / Cashback / Refund scam inside Google Pay
-        val matchedReverseKeywords = REVERSE_PAYMENT_KEYWORDS.filter { lowerText.contains(it) }
+        // 3. Vector: Reverse Payment / Cashback / Refund scam inside Google Pay
+        val matchedReverseKeywords = REVERSE_PAYMENT_KEYWORDS.filter {
+            lowerPayee.contains(it) || lowerText.contains("claim $it") || lowerText.contains("receive $it")
+        }
         if (matchedReverseKeywords.isNotEmpty()) {
             score += 60
             fraudType = "REVERSE_QR_SCAM"
-            flaggedReasons.add("Deceptive 'Cashback / Refund / Prize' keywords on payment screen: ${matchedReverseKeywords.joinToString(", ")}")
+            flaggedReasons.add("Deceptive 'Cashback / Refund / Prize' keywords in payee: ${matchedReverseKeywords.joinToString(", ")}")
         }
 
-        // 2. Vector: Fake Electricity / Utility Impersonation
-        val matchedImpersonation = IMPERSONATION_KEYWORDS.filter { lowerText.contains(it) }
+        // 4. Vector: Fake Electricity / Utility Impersonation
+        val matchedImpersonation = IMPERSONATION_KEYWORDS.filter { lowerPayee.contains(it) }
         if (matchedImpersonation.isNotEmpty()) {
-            score += 50
-            fraudType = if (fraudType == "UNKNOWN") "IMPERSONATION_SCAM" else fraudType
-            flaggedReasons.add("Impersonating utility/authority on payment screen: ${matchedImpersonation.joinToString(", ")}")
-
-            // If VPA is present and ends with standard personal P2P handles (okaxis, okhdfcbank, ybl, paytm)
             if (vpa.isNotBlank() && isPersonalVpaHandle(vpa)) {
-                score += 30
-                flaggedReasons.add("Utility payment routed to unverified personal VPA handle: $vpa")
+                score += 80
+                fraudType = "IMPERSONATION_SCAM"
+                flaggedReasons.add("Utility payee '$payeeName' routes payment to unverified personal VPA handle: $vpa")
             }
         }
 
-        // 3. Vector: Suspicious high-risk URL or APK references in payment notes
+        // 5. Vector: Suspicious high-risk URL or APK references in payment notes
         val matchedUrl = SUSPICIOUS_URL_PATTERNS.filter { lowerText.contains(it) }
         if (matchedUrl.isNotEmpty()) {
             score += 50
