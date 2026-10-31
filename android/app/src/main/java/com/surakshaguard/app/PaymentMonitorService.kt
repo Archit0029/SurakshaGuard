@@ -50,19 +50,28 @@ class PaymentMonitorService : AccessibilityService() {
             "in.org.npci.upiapp" to "BHIM UPI"
         )
 
-        // 1. Urgency triggers
+        // 1. Urgency & Coercion triggers
         val URGENCY_TRIGGERS = listOf(
-            "urgent", "immediate", "bijli", "disconnect", "penalty", "overdue"
+            "urgent", "immediate", "bijli", "disconnect", "penalty", "overdue",
+            "power cut", "bill due", "discom", "challan", "customs", "arrest"
         )
 
         // 2. Remote access triggers
         val REMOTE_ACCESS_TRIGGERS = listOf(
-            "anydesk", "teamviewer", "quicksupport", "rustdesk"
+            "anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid", "screen share"
         )
 
-        // 3. Fraud bait triggers
+        // 3. Fraud bait & reverse-payment triggers
         val FRAUD_BAIT_TRIGGERS = listOf(
-            "enter pin to receive", "cashback lottery", "refund verification"
+            "enter pin to receive", "cashback", "lottery", "refund", "reward",
+            "prize", "bonus", "winner", "claim", "receive money", "pin to get",
+            "gift voucher", "subsidy", "lucky draw"
+        )
+
+        // 4. Authority & Fake support impersonation triggers
+        val IMPERSONATION_TRIGGERS = listOf(
+            "customer care", "customercare", "helpline", "support desk",
+            "kyc update", "pan update", "sim block", "account blocked"
         )
 
         /**
@@ -102,20 +111,29 @@ class PaymentMonitorService : AccessibilityService() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val isDemoMode = prefs.getBoolean(KEY_DEMO_MODE, false)
 
-        val root = rootInActiveWindow ?: return
+        val root = rootInActiveWindow ?: event.source ?: return
 
-        // 2. Tree Traversal: Extract all text from active node hierarchy
-        val fullScreenText = extractAllTextFromNode(root)
+        // 2. Tree Traversal: Extract all text from active node hierarchy + event payload
+        val nodeText = extractAllTextFromNode(root)
+        val eventText = event.text.joinToString(" ")
+        val fullScreenText = (nodeText + " " + eventText).trim()
         if (fullScreenText.isBlank()) return
 
-        // 3. Heuristic Threat Detection: Normalize to lowercase
+        // 3. Heuristic & Deep QR Threat Detection: Normalize to lowercase
         val lowerText = fullScreenText.lowercase()
+
+        // Evaluate screen contents through QrThreatEngine intelligence
+        val qrAnalysis = QrThreatEngine.analyzeScreenText(fullScreenText)
 
         val matchedUrgency = URGENCY_TRIGGERS.filter { lowerText.contains(it) }
         val matchedRemote = REMOTE_ACCESS_TRIGGERS.filter { lowerText.contains(it) }
         val matchedBait = FRAUD_BAIT_TRIGGERS.filter { lowerText.contains(it) }
+        val matchedImpersonation = IMPERSONATION_TRIGGERS.filter { lowerText.contains(it) }
 
-        val hasThreat = isDemoMode || matchedUrgency.isNotEmpty() || matchedRemote.isNotEmpty() || matchedBait.isNotEmpty()
+        val hasKeywordThreat = matchedRemote.isNotEmpty() || matchedBait.isNotEmpty() ||
+                matchedUrgency.isNotEmpty() || matchedImpersonation.isNotEmpty()
+
+        val hasThreat = isDemoMode || qrAnalysis.isFraud || hasKeywordThreat
 
         if (!hasThreat) return
 
@@ -124,26 +142,76 @@ class PaymentMonitorService : AccessibilityService() {
         detectedKeywords.addAll(matchedRemote)
         detectedKeywords.addAll(matchedBait)
         detectedKeywords.addAll(matchedUrgency)
+        detectedKeywords.addAll(matchedImpersonation)
+        if (qrAnalysis.flaggedPatterns.isNotEmpty()) {
+            detectedKeywords.addAll(qrAnalysis.flaggedPatterns)
+        }
 
         val keywordSummary = if (detectedKeywords.isNotEmpty()) {
-            detectedKeywords.joinToString("', '", prefix = "'", postfix = "'")
+            detectedKeywords.distinct().take(4).joinToString("', '", prefix = "'", postfix = "'")
         } else if (isDemoMode) {
             "demo_simulation"
         } else {
-            "suspicious_social_engineering"
+            "suspicious_payment_qr"
         }
 
-        val reasonText = when {
-            matchedRemote.isNotEmpty() ->
-                "Detected unauthorized remote access keyword: $keywordSummary in transaction screen."
-            matchedBait.isNotEmpty() ->
-                "Detected reverse-payment fraud bait: $keywordSummary."
-            matchedUrgency.isNotEmpty() ->
-                "Detected high-urgency extortion / power disconnection coercion trigger: $keywordSummary."
-            isDemoMode ->
-                "Demo Simulation Mode: Verified real-time payment application focus."
-            else ->
-                "Detected high-risk social engineering markers on payment screen."
+        // Formulate tailored threat titles, descriptions, and action advice
+        val threatTitleEn: String
+        val threatTitleHi: String
+        val reasonText: String
+        val threatDescHi: String
+        val actionGuide: String
+
+        when {
+            qrAnalysis.isFraud -> {
+                threatTitleEn = qrAnalysis.title
+                threatTitleHi = qrAnalysis.titleHindi
+                reasonText = "${qrAnalysis.explanation}\n\n• Payee: ${qrAnalysis.payeeName}\n• VPA Handle: ${qrAnalysis.payeeVpa}"
+                threatDescHi = qrAnalysis.explanationHindi
+                actionGuide = qrAnalysis.actionAdvice
+            }
+            matchedRemote.isNotEmpty() -> {
+                threatTitleEn = "⚠️ PAYMENT INTERCEPTED: REMOTE ACCESS FRAUD"
+                threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: रिमोट ऐप धोखाधड़ी"
+                reasonText = "Detected dangerous remote desktop / screen control keyword: $keywordSummary on payment screen."
+                threatDescHi = "पेमेंट स्क्रीन पर रिमोट ऐप या स्क्रीन शेयरिंग के संदिग्ध शब्द पाए गए हैं।"
+                actionGuide = "Do NOT enter your UPI PIN. Never make payments requested over AnyDesk or TeamViewer."
+            }
+            matchedBait.isNotEmpty() -> {
+                threatTitleEn = "⚠️ PAYMENT INTERCEPTED: FAKE CASHBACK / REWARD TRAP"
+                threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: फर्जी कैशबैक/इनाम का झांसा"
+                reasonText = "Detected deceptive reverse-payment trap ($keywordSummary). In UPI, you never scan a QR or enter PIN to receive money."
+                threatDescHi = "कैशबैक या पैसे पाने के लिए कभी भी यूपीआई पिन डालने की जरूरत नहीं होती।"
+                actionGuide = "Never enter your UPI PIN to claim money, refunds, or lottery prizes."
+            }
+            matchedUrgency.isNotEmpty() -> {
+                threatTitleEn = "⚠️ PAYMENT INTERCEPTED: HIGH-URGENCY COERCION"
+                threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: तात्कालिक दबाव/बिजली बिल धमकी"
+                reasonText = "Detected high-urgency extortion / power disconnection coercion trigger: $keywordSummary."
+                threatDescHi = "बिजली कटने या जुर्माने की धमकी देकर दबाव में पेमेंट करवाने की कोशिश पाई गई।"
+                actionGuide = "Do not pay under pressure. Official utility discoms never disconnect immediately via UPI."
+            }
+            matchedImpersonation.isNotEmpty() -> {
+                threatTitleEn = "⚠️ PAYMENT INTERCEPTED: FAKE SUPPORT / IMPERSONATION"
+                threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: फर्जी कस्टमर केयर / बैंक जालसाजी"
+                reasonText = "Detected suspicious helpline or fake customer support marker: $keywordSummary."
+                threatDescHi = "फर्जी कस्टमर केयर या बैंक अधिकारी बनकर पैसे ट्रांसफर करवाने का प्रयास पाया गया।"
+                actionGuide = "Disconnect any phone call and verify contact details through official apps."
+            }
+            isDemoMode -> {
+                threatTitleEn = "🛡️ DEMO TEST: PAYMENT INTERCEPTION VERIFIED"
+                threatTitleHi = "🛡️ टेस्ट डेमो: यूपीआई सुरक्षा परीक्षण सक्रिय"
+                reasonText = "Demo Simulation Mode: Successfully intercepted active payment application."
+                threatDescHi = "डेमो मोड: सुरक्षागार्ड ने पेमेंट ऐप की सुरक्षा जांच सफलतापूर्वक पूरी की।"
+                actionGuide = "Disable Demo Mode in Suraksha Guard when you are done testing."
+            }
+            else -> {
+                threatTitleEn = "⚠️ PAYMENT INTERCEPTED: HIGH RISK OF SCAM"
+                threatTitleHi = "⚠️ यूपीआई भुगतान रोका गया: धोखाधड़ी का गंभीर खतरा"
+                reasonText = "Detected high-risk social engineering markers on payment screen."
+                threatDescHi = "सुरक्षागार्ड ने इस भुगतान में धोखाधड़ी के संदिग्ध शब्द पाए हैं।"
+                actionGuide = "Do not enter your UPI PIN. Verify the payment details independently."
+            }
         }
 
         // 4. Prevent duplicate spam triggers using 5-second debounce window
@@ -169,11 +237,11 @@ class PaymentMonitorService : AccessibilityService() {
             putExtra(EXTRA_DETECTED_KEYWORD, keywordSummary)
             putExtra(EXTRA_FULL_TEXT, fullScreenText)
             putExtra(EXTRA_THREAT_TYPE, if (isDemoMode) ThreatType.DEMO_MODE.name else ThreatType.FRAUD_QR_CODE.name)
-            putExtra(EXTRA_THREAT_TITLE, "⚠️ PAYMENT INTERCEPTED: HIGH RISK OF SCAM")
-            putExtra(EXTRA_THREAT_TITLE_HI, "⚠️ यूपीआई भुगतान रोका गया: धोखाधड़ी का गंभीर खतरा")
+            putExtra(EXTRA_THREAT_TITLE, threatTitleEn)
+            putExtra(EXTRA_THREAT_TITLE_HI, threatTitleHi)
             putExtra(EXTRA_THREAT_DESC, reasonText)
-            putExtra(EXTRA_THREAT_DESC_HI, "सुरक्षागार्ड ने इस भुगतान में धोखाधड़ी के संदिग्ध शब्द पाए हैं।")
-            putExtra(EXTRA_ACTION_GUIDE, "Do not enter your UPI PIN. Verify the payment details independently.")
+            putExtra(EXTRA_THREAT_DESC_HI, threatDescHi)
+            putExtra(EXTRA_ACTION_GUIDE, actionGuide)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

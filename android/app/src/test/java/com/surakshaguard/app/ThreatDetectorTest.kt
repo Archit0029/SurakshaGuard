@@ -212,7 +212,8 @@ class ThreatDetectorTest {
         val matchedBait = PaymentMonitorService.FRAUD_BAIT_TRIGGERS.filter { lower.contains(it) }
 
         assertTrue("Must detect 'enter pin to receive'", matchedBait.contains("enter pin to receive"))
-        assertTrue("Must detect 'cashback lottery'", matchedBait.contains("cashback lottery"))
+        assertTrue("Must detect 'cashback'", matchedBait.contains("cashback"))
+        assertTrue("Must detect 'lottery'", matchedBait.contains("lottery"))
     }
 
     @Test

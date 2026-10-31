@@ -41,11 +41,9 @@ object QrThreatEngine {
 
     // Markers that indicate user is browsing the home/navigation screen of a payment app
     private val HOME_SCREEN_INDICATORS = listOf(
-        "scan any qr", "scan qr code", "check bank balance", "check balance",
-        "see transaction history", "transaction history", "pay phone number",
-        "pay contacts", "bank transfer", "pay bills", "manage your money",
-        "recharge & pay bills", "to mobile number", "to bank/upi id",
-        "to self account", "balance & history", "explore"
+        "scan any qr", "scan qr code", "check bank balance",
+        "see transaction history", "manage your money",
+        "to bank/upi id", "to self account"
     )
 
     // Suspicious URL indicators inside the UPI `url` parameter
@@ -198,9 +196,22 @@ object QrThreatEngine {
     fun analyzeScreenText(screenText: String): QrThreatAnalysis {
         val lowerText = screenText.lowercase()
 
-        // 1. If on home/browse screen, NEVER evaluate as a payment checkout
+        // Critical social engineering and fraud bait keywords
+        val hasDirectScamKeyword = lowerText.contains("anydesk") ||
+                lowerText.contains("teamviewer") ||
+                lowerText.contains("quicksupport") ||
+                lowerText.contains("rustdesk") ||
+                lowerText.contains("enter pin to receive") ||
+                lowerText.contains("cashback") ||
+                lowerText.contains("refund") ||
+                lowerText.contains("lottery") ||
+                lowerText.contains("bijli") ||
+                lowerText.contains("power cut") ||
+                lowerText.contains("disconnect")
+
+        // 1. If browsing home screen AND no explicit scam keywords are present, evaluate as safe
         val isHomeScreen = HOME_SCREEN_INDICATORS.any { lowerText.contains(it) }
-        if (isHomeScreen) {
+        if (isHomeScreen && !hasDirectScamKeyword) {
             return QrThreatAnalysis(
                 isFraud = false,
                 riskScore = 0,
@@ -218,13 +229,26 @@ object QrThreatEngine {
             )
         }
 
-        // 2. Must have active payment intent (user scanned a QR or entered payment flow)
-        val hasPaymentIntent = lowerText.contains("paying") ||
+        val vpa = extractVpaFallback(screenText)
+        val amount = extractAmountFallback(screenText)
+        val payeeName = extractPayeeNameFallback(screenText, vpa)
+        val lowerPayee = payeeName.lowercase()
+
+        // 2. Active payment intent checks
+        val hasPaymentIntent = hasDirectScamKeyword ||
+                lowerText.contains("paying") ||
                 lowerText.contains("pay ₹") ||
                 lowerText.contains("pay to") ||
                 lowerText.contains("proceed to pay") ||
                 lowerText.contains("pay securely") ||
-                lowerText.contains("transfer to")
+                lowerText.contains("transfer to") ||
+                lowerText.contains("send money") ||
+                lowerText.contains("banking name") ||
+                lowerText.contains("add a note") ||
+                lowerText.contains("upi id") ||
+                lowerText.contains("enter upi pin") ||
+                vpa.isNotBlank() ||
+                lowerText.contains("₹")
 
         if (!hasPaymentIntent) {
             return QrThreatAnalysis(
@@ -244,39 +268,40 @@ object QrThreatEngine {
             )
         }
 
-        val vpa = extractVpaFallback(screenText)
-        val amount = extractAmountFallback(screenText)
-        val payeeName = extractPayeeNameFallback(screenText, vpa)
-        val lowerPayee = payeeName.lowercase()
-
         val flaggedReasons = mutableListOf<String>()
         var score = 0
         var fraudType = "UNKNOWN"
 
         // 3. Vector: Reverse Payment / Cashback / Refund scam inside Google Pay
         val matchedReverseKeywords = REVERSE_PAYMENT_KEYWORDS.filter {
-            lowerPayee.contains(it) || lowerText.contains("claim $it") || lowerText.contains("receive $it")
+            lowerPayee.contains(it) || lowerText.contains(it)
         }
         if (matchedReverseKeywords.isNotEmpty()) {
-            score += 60
+            score += 65
             fraudType = "REVERSE_QR_SCAM"
-            flaggedReasons.add("Deceptive 'Cashback / Refund / Prize' keywords in payee: ${matchedReverseKeywords.joinToString(", ")}")
+            flaggedReasons.add("Deceptive 'Cashback / Refund / Prize' keywords in payment details: ${matchedReverseKeywords.joinToString(", ")}")
         }
 
         // 4. Vector: Fake Electricity / Utility Impersonation
-        val matchedImpersonation = IMPERSONATION_KEYWORDS.filter { lowerPayee.contains(it) }
+        val matchedImpersonation = IMPERSONATION_KEYWORDS.filter {
+            lowerPayee.contains(it) || lowerText.contains(it)
+        }
         if (matchedImpersonation.isNotEmpty()) {
             if (vpa.isNotBlank() && isPersonalVpaHandle(vpa)) {
-                score += 80
+                score += 85
                 fraudType = "IMPERSONATION_SCAM"
-                flaggedReasons.add("Utility payee '$payeeName' routes payment to unverified personal VPA handle: $vpa")
+                flaggedReasons.add("Utility/official authority impersonation ($matchedImpersonation) routes funds to personal VPA: $vpa")
+            } else if (lowerText.contains("disconnect") || lowerText.contains("power cut") || lowerText.contains("overdue")) {
+                score += 75
+                fraudType = "IMPERSONATION_SCAM"
+                flaggedReasons.add("High-urgency electricity disconnection threat in payment note: ${matchedImpersonation.joinToString(", ")}")
             }
         }
 
         // 5. Vector: Suspicious high-risk URL or APK references in payment notes
         val matchedUrl = SUSPICIOUS_URL_PATTERNS.filter { lowerText.contains(it) }
         if (matchedUrl.isNotEmpty()) {
-            score += 50
+            score += 60
             fraudType = "MALICIOUS_LINK_QR"
             flaggedReasons.add("Suspicious external link or APK reference detected on payment screen")
         }
