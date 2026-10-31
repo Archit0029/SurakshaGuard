@@ -26,17 +26,19 @@ data class QrThreatAnalysis(
 object QrThreatEngine {
 
     // Reverse QR Trap keywords: Scammers send payment QRs claiming victim will "receive" money
-    private val REVERSE_PAYMENT_KEYWORDS = listOf(
+    val REVERSE_PAYMENT_KEYWORDS = listOf(
         "refund", "cashback", "reward", "lottery", "win", "winner", "prize",
         "bonus", "claim", "receive", "credit", "gift", "subsidy", "voucher"
     )
 
     // Authority / Utility impersonation keywords
-    private val IMPERSONATION_KEYWORDS = listOf(
+    val IMPERSONATION_KEYWORDS = listOf(
         "electricity", "bijli", "power", "discom", "bses", "uppcl", "tneb", "bescom", "sbpdcl",
+        "power bill", "bill due", "power cut", "water bill", "gas bill",
         "customs", "police", "challan", "trai", "court", "cbi", "cyber",
         "kyc", "pan", "aadhar", "account block", "unblock", "suspended",
-        "customer care", "customercare", "helpline", "support desk", "helpdesk"
+        "customer care", "customercare", "helpline", "support desk", "helpdesk",
+        "bank support", "tech support"
     )
 
     // Markers that indicate user is browsing the home/navigation screen of a payment app
@@ -50,27 +52,44 @@ object QrThreatEngine {
 
     fun hasBlatantScamMarker(lowerText: String): Boolean {
         // 1. Remote access keywords
-        val hasRemote = listOf("anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid").any { lowerText.contains(it) }
+        val hasRemote = listOf("anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid", "screen share").any { lowerText.contains(it) }
         if (hasRemote) return true
 
-        // 2. Reverse payment bait compound phrases
-        val hasBait = REVERSE_PAYMENT_PATTERNS.any { lowerText.contains(it) }
+        // 2. Reverse payment bait compound phrases and keywords
+        val hasBait = (REVERSE_PAYMENT_PATTERNS + listOf(
+            "cashback reward", "claim cashback", "cashback lottery", "enter pin to receive",
+            "receive money", "claim refund", "refund claim", "prize claim", "lottery winner",
+            "googlepay cashback", "paytm cashback", "phonepe cashback"
+        )).any { lowerText.contains(it) }
         if (hasBait) return true
 
         // 3. Fake electricity / discom markers
-        val hasDiscom = lowerText.contains("discom") || lowerText.contains("bses") || lowerText.contains("uppcl")
-        val hasUrgentBill = lowerText.contains("electricity") && (lowerText.contains("bill due") || lowerText.contains("power cut") || lowerText.contains("disconnect"))
-        if (hasDiscom || hasUrgentBill) return true
+        val hasDiscom = listOf("discom", "bses", "uppcl", "tneb", "bescom", "power cut", "bill due", "electricity bill", "urgent bijli", "power bill").any { lowerText.contains(it) }
+        if (hasDiscom) return true
 
-        // 4. Malicious redirect links
+        // 4. Remote support & fake helpline
+        val hasSupport = listOf("support desk", "bank support", "tech support", "customer care helpline", "kyc update").any { lowerText.contains(it) }
+        if (hasSupport) return true
+
+        // 5. Malicious redirect links
         val hasBadUrl = SUSPICIOUS_URL_PATTERNS.any { lowerText.contains(it) }
         if (hasBadUrl) return true
+
+        // 6. Direct UPI QR URI detected in text
+        if (lowerText.contains("upi://pay") || lowerText.contains("upi://")) return true
 
         return false
     }
 
     fun isHomeScreen(lowerText: String): Boolean {
-        // If a verified fraud pattern is on screen, it is NEVER an innocent home screen!
+        // If active checkout cues are present, it is an active payment checkout screen, NOT a home screen!
+        val activeCheckoutCues = listOf(
+            "proceed to pay", "pay ₹", "pay securely", "paying ", "enter upi pin",
+            "pay now", "paying to", "transfer to"
+        )
+        if (activeCheckoutCues.any { lowerText.contains(it) }) {
+            return false
+        }
         if (hasBlatantScamMarker(lowerText)) {
             return false
         }
@@ -84,11 +103,11 @@ object QrThreatEngine {
         val paymentCues = listOf(
             "paying", "proceed to pay", "pay securely", "pay ₹", "pay to",
             "transfer to", "banking name", "add a note", "enter upi pin",
-            "enter amount", "send money"
+            "enter amount", "send money", "to bank/upi", "pay now", "to:"
         )
         val hasCue = paymentCues.any { lowerText.contains(it) }
-        val hasPayWithAmount = (lowerText.contains("pay") || lowerText.contains("send") || lowerText.contains("to")) &&
-                (lowerText.contains("₹") || lowerText.contains("inr") || vpa.isNotBlank())
+        val hasPayWithAmount = (lowerText.contains("pay") || lowerText.contains("send") || lowerText.contains("to") || lowerText.contains("transfer")) &&
+                (lowerText.contains("₹") || lowerText.contains("inr") || lowerText.contains("rs.") || vpa.isNotBlank())
         return hasCue || hasPayWithAmount
     }
 
@@ -315,21 +334,22 @@ object QrThreatEngine {
         var score = 0
         var fraudType = "UNKNOWN"
 
-        // 3. Vector: Reverse Payment / Cashback / Refund scam inside Google Pay
-        val matchedReverseKeywords = REVERSE_PAYMENT_PATTERNS.filter {
+        // 3. Vector: Reverse Payment / Cashback / Reward scam inside Payment App
+        val allReversePatterns = (REVERSE_PAYMENT_PATTERNS + REVERSE_PAYMENT_KEYWORDS).distinct()
+        val matchedReverseKeywords = allReversePatterns.filter {
             lowerPayee.contains(it) || lowerText.contains(it)
         }
         if (matchedReverseKeywords.isNotEmpty()) {
-            score += 65
+            score += 75
             fraudType = "REVERSE_QR_SCAM"
             flaggedReasons.add("Deceptive 'Cashback / Refund / Prize' keywords in payment details: ${matchedReverseKeywords.joinToString(", ")}")
         }
 
         // 4. Vector: Remote Desktop / Screen Coercion on payment checkout screen
-        val remoteTools = listOf("anydesk", "teamviewer", "quicksupport", "rustdesk")
+        val remoteTools = listOf("anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid", "screen share")
         val matchedRemote = remoteTools.filter { lowerText.contains(it) }
         if (matchedRemote.isNotEmpty()) {
-            score += 70
+            score += 85
             fraudType = "REMOTE_ACCESS_COERCION"
             flaggedReasons.add("Remote desktop keyword detected on payment checkout screen: ${matchedRemote.joinToString(", ")}")
         }
@@ -339,22 +359,16 @@ object QrThreatEngine {
             lowerPayee.contains(it) || lowerText.contains(it)
         }
         if (matchedImpersonation.isNotEmpty()) {
-            if (vpa.isNotBlank() && isPersonalVpaHandle(vpa)) {
-                score += 85
-                fraudType = "IMPERSONATION_SCAM"
-                flaggedReasons.add("Utility/official authority impersonation ($matchedImpersonation) routes funds to personal VPA: $vpa")
-            } else if (lowerText.contains("disconnect") || lowerText.contains("power cut") || lowerText.contains("overdue")) {
-                score += 75
-                fraudType = "IMPERSONATION_SCAM"
-                flaggedReasons.add("High-urgency electricity disconnection threat in payment note: ${matchedImpersonation.joinToString(", ")}")
-            }
+            score += 80
+            fraudType = if (fraudType == "UNKNOWN") "IMPERSONATION_SCAM" else fraudType
+            flaggedReasons.add("Utility/official authority impersonation markers on payment screen: ${matchedImpersonation.joinToString(", ")}")
         }
 
         // 6. Vector: Suspicious high-risk URL or APK references in payment notes
         val matchedUrl = SUSPICIOUS_URL_PATTERNS.filter { lowerText.contains(it) }
         if (matchedUrl.isNotEmpty()) {
-            score += 60
-            fraudType = "MALICIOUS_LINK_QR"
+            score += 75
+            fraudType = if (fraudType == "UNKNOWN") "MALICIOUS_LINK_QR" else fraudType
             flaggedReasons.add("Suspicious external link or APK reference detected on payment screen")
         }
 

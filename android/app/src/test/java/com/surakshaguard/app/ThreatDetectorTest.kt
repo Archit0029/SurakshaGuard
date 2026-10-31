@@ -238,6 +238,61 @@ class ThreatDetectorTest {
     }
 
     @Test
+    fun testAllFourScamCases_rawUriAnalysis_flaggedAsFraud() {
+        val case1 = "upi://pay?pa=scammer-lucky@paytm&pn=GooglePay%20Cashback%20Reward&am=2500&cu=INR&tn=Claim%20Cashback"
+        val case2 = "upi://pay?pa=bses-power-bill@ybl&pn=BSES%20Electricity%20Discom&am=4999&cu=INR&tn=Electricity%20Bill%20Due%20Urgent"
+        val case3 = "upi://pay?pa=techsupport@upi&pn=Bank%20Support%20Desk&am=10&cu=INR&tn=Urgent%20AnyDesk%20Fee"
+        val case4 = "upi://pay?pa=customs-help@okaxis&pn=Customs%20Clearance&am=12000&cu=INR&url=http://bit.ly/fake-customs-apk"
+
+        val a1 = QrThreatEngine.analyze(case1)
+        val a2 = QrThreatEngine.analyze(case2)
+        val a3 = QrThreatEngine.analyze(case3)
+        val a4 = QrThreatEngine.analyze(case4)
+
+        assertTrue("Case 1 (Cashback trap) must be fraud", a1.isFraud)
+        assertTrue("Case 2 (Fake Electricity Discom) must be fraud", a2.isFraud)
+        assertTrue("Case 3 (AnyDesk Coercion) must be fraud", a3.isFraud)
+        assertTrue("Case 4 (Malicious URL) must be fraud", a4.isFraud)
+    }
+
+    @Test
+    fun testAllFourScamCases_screenTextAnalysis_flaggedAsFraud() {
+        // Case 1: GPay checkout screen with note or payee
+        val screenCase1 = "Paying Lucky scammer-lucky@paytm ₹2,500.00 Claim Cashback Proceed to pay"
+        val a1 = QrThreatEngine.analyzeScreenText(screenCase1)
+        assertTrue("Case 1 screen text must be flagged", a1.isFraud)
+        assertEquals("REVERSE_QR_SCAM", a1.fraudType)
+
+        // Case 2: GPay checkout screen with BSES electricity
+        val screenCase2 = "Paying BSES Electricity Discom bses-power-bill@ybl ₹4,999.00 Electricity Bill Due Urgent Pay ₹4,999"
+        val a2 = QrThreatEngine.analyzeScreenText(screenCase2)
+        assertTrue("Case 2 screen text must be flagged", a2.isFraud)
+        assertEquals("IMPERSONATION_SCAM", a2.fraudType)
+
+        // Case 3: GPay checkout screen with AnyDesk fee
+        val screenCase3 = "Paying Bank Support Desk techsupport@upi ₹10.00 Urgent AnyDesk Fee Pay ₹10"
+        val a3 = QrThreatEngine.analyzeScreenText(screenCase3)
+        assertTrue("Case 3 screen text must be flagged", a3.isFraud)
+        assertEquals("REMOTE_ACCESS_COERCION", a3.fraudType)
+
+        // Case 4: GPay checkout screen with customs clearance and bit.ly
+        val screenCase4 = "Paying Customs Clearance customs-help@okaxis ₹12,000.00 bit.ly/fake-customs-apk Proceed to pay"
+        val a4 = QrThreatEngine.analyzeScreenText(screenCase4)
+        assertTrue("Case 4 screen text must be flagged", a4.isFraud)
+        assertTrue(a4.isFraud)
+    }
+
+    @Test
+    fun testPaymentMonitorService_hasBlatantScamMarker_detectsAllCases() {
+        assertTrue(QrThreatEngine.hasBlatantScamMarker("paying googlepay cashback reward ₹2,500"))
+        assertTrue(QrThreatEngine.hasBlatantScamMarker("claim cashback on this qr"))
+        assertTrue(QrThreatEngine.hasBlatantScamMarker("paying bses electricity discom ₹4,999"))
+        assertTrue(QrThreatEngine.hasBlatantScamMarker("electricity bill due urgent"))
+        assertTrue(QrThreatEngine.hasBlatantScamMarker("urgent anydesk fee"))
+        assertTrue(QrThreatEngine.hasBlatantScamMarker("customs clearance bit.ly/fake-apk"))
+    }
+
+    @Test
     fun testMultiplePermutations_cleanStateAlwaysPasses() {
         // Run clean check 100 times to guarantee consistency
         for (i in 1..100) {

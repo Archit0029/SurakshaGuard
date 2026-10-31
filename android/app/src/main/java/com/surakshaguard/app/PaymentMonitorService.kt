@@ -41,19 +41,36 @@ class PaymentMonitorService : AccessibilityService() {
         const val EXTRA_FULL_TEXT = "EXTRA_FULL_TEXT"
 
         /**
-         * Target Indian UPI applications monitored for pre-authorization fraud interception.
+         * Target Indian UPI applications and camera/lens scanners monitored for pre-authorization fraud interception.
          */
         val TARGET_UPI_PACKAGES = mapOf(
             "com.google.android.apps.nbu.paisa.user" to "Google Pay",
             "net.one97.paytm" to "Paytm",
             "com.phonepe.app" to "PhonePe",
-            "in.org.npci.upiapp" to "BHIM UPI"
+            "in.org.npci.upiapp" to "BHIM UPI",
+            "com.cred.club" to "CRED UPI",
+            "in.amazon.mShop.android.shopping" to "Amazon Pay",
+            "com.whatsapp" to "WhatsApp Pay",
+            "com.samsung.android.spay" to "Samsung Pay",
+            "com.naviapp" to "Navi UPI"
+        )
+
+        val SCANNER_PACKAGES = mapOf(
+            "com.google.ar.lens" to "Google Lens",
+            "com.google.android.GoogleCamera" to "Google Camera",
+            "com.sec.android.app.camera" to "Samsung Camera",
+            "com.android.camera" to "System Camera",
+            "com.xiaomi.scanner" to "Mi Scanner",
+            "com.oppo.camera" to "Oppo Camera",
+            "com.oplus.camera" to "OnePlus Camera",
+            "com.vivo.camera" to "Vivo Camera"
         )
 
         // 1. Urgency & Coercion triggers
         val URGENCY_TRIGGERS = listOf(
             "urgent", "immediate", "bijli", "disconnect", "penalty", "overdue",
-            "power cut", "bill due", "discom", "challan", "customs", "arrest"
+            "power cut", "bill due", "discom", "challan", "customs", "arrest",
+            "fee", "power bill", "electricity bill", "electricity"
         )
 
         // 2. Remote access triggers
@@ -61,13 +78,19 @@ class PaymentMonitorService : AccessibilityService() {
             "anydesk", "teamviewer", "quicksupport", "rustdesk", "airdroid", "screen share"
         )
 
-        // 3. Fraud bait & reverse-payment triggers (compound phrases to avoid matching native UI tabs like 'Rewards')
-        val FRAUD_BAIT_TRIGGERS = QrThreatEngine.REVERSE_PAYMENT_PATTERNS
+        // 3. Fraud bait & reverse-payment triggers
+        val FRAUD_BAIT_TRIGGERS = (QrThreatEngine.REVERSE_PAYMENT_PATTERNS + QrThreatEngine.REVERSE_PAYMENT_KEYWORDS + listOf(
+            "claim cashback", "cashback reward", "cashback lottery", "enter pin to receive",
+            "pin to receive", "receive money", "claim refund", "refund claim", "prize claim",
+            "claim prize", "lottery winner", "lucky draw winner", "claim bonus", "googlepay cashback",
+            "paytm cashback", "phonepe cashback"
+        )).distinct()
 
         // 4. Authority & Fake support impersonation triggers
         val IMPERSONATION_TRIGGERS = listOf(
-            "customer care", "customercare", "helpline", "support desk",
-            "kyc update", "pan update", "sim block", "account blocked"
+            "customer care", "customercare", "helpline", "support desk", "bank support", "tech support",
+            "kyc update", "pan update", "sim block", "account blocked",
+            "bses", "discom", "uppcl", "tneb", "bescom", "power cut", "bill due", "power bill"
         )
 
         /**
@@ -95,8 +118,14 @@ class PaymentMonitorService : AccessibilityService() {
 
         val pkgName = event.packageName?.toString() ?: return
 
-        // 1. Event Handling: Verify focused package is in target UPI list
-        if (!TARGET_UPI_PACKAGES.containsKey(pkgName)) return
+        // 1. Event Handling: Verify focused package is in target UPI or camera/scanner list
+        val isTargetUpi = TARGET_UPI_PACKAGES.containsKey(pkgName)
+        val isScanner = SCANNER_PACKAGES.containsKey(pkgName)
+        val isGenericPaymentOrCamera = pkgName.contains("paisa") || pkgName.contains("pay") ||
+                pkgName.contains("upi") || pkgName.contains("wallet") ||
+                pkgName.contains("lens") || pkgName.contains("camera") || pkgName.contains("scanner")
+
+        if (!isTargetUpi && !isScanner && !isGenericPaymentOrCamera) return
 
         val now = System.currentTimeMillis()
 
@@ -107,30 +136,59 @@ class PaymentMonitorService : AccessibilityService() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val isDemoMode = prefs.getBoolean(KEY_DEMO_MODE, false)
 
-        val root = rootInActiveWindow ?: event.source ?: return
+        // 2. Multi-Window & Node Tree Traversal: Extract all text from interactive windows + event payload
+        val textTokens = mutableListOf<String>()
 
-        // 2. Tree Traversal: Extract all text from active node hierarchy + event payload
-        val nodeText = extractAllTextFromNode(root)
-        val eventText = event.text.joinToString(" ")
-        val fullScreenText = (nodeText + " " + eventText).trim()
+        val windowList = runCatching { windows }.getOrNull()
+        if (!windowList.isNullOrEmpty()) {
+            for (window in windowList) {
+                val wRoot = window.root ?: continue
+                collectTextRecursively(wRoot, textTokens)
+            }
+        }
+
+        val activeRoot = rootInActiveWindow
+        if (activeRoot != null) {
+            collectTextRecursively(activeRoot, textTokens)
+        }
+
+        if (textTokens.isEmpty()) {
+            event.source?.let { collectTextRecursively(it, textTokens) }
+        }
+
+        for (t in event.text) {
+            if (!t.isNullOrBlank()) {
+                textTokens.add(t.toString())
+            }
+        }
+
+        val fullScreenText = textTokens.distinct().joinToString(" ").trim()
         if (fullScreenText.isBlank()) return
 
         // 3. Heuristic & Deep QR Threat Detection: Normalize to lowercase
         val lowerText = fullScreenText.lowercase()
 
+        // Direct Raw UPI URI Detection (handles Google Lens / Camera previewing raw QR payloads)
+        val rawUpiMatch = Regex("upi://[a-zA-Z0-9_?&=%.:/\\-+]+").find(fullScreenText)
+        val rawUriAnalysis = if (rawUpiMatch != null) {
+            QrThreatEngine.analyze(rawUpiMatch.value)
+        } else {
+            null
+        }
+
         // CRITICAL GUARD 1: If user is on the home/navigation screen, NEVER evaluate or intercept!
-        if (QrThreatEngine.isHomeScreen(lowerText)) {
+        if (rawUriAnalysis == null && QrThreatEngine.isHomeScreen(lowerText)) {
             return
         }
 
-        // CRITICAL GUARD 2: Must be on an active payment checkout screen
+        // CRITICAL GUARD 2: Must be on an active payment checkout screen (or have direct raw QR threat)
         val vpa = QrThreatEngine.extractVpaFallback(fullScreenText)
-        if (!isDemoMode && !QrThreatEngine.isPaymentScreen(lowerText, vpa)) {
+        if (rawUriAnalysis == null && !isDemoMode && !QrThreatEngine.isPaymentScreen(lowerText, vpa)) {
             return
         }
 
         // Evaluate screen contents through QrThreatEngine intelligence
-        val qrAnalysis = QrThreatEngine.analyzeScreenText(fullScreenText)
+        val qrAnalysis = rawUriAnalysis ?: QrThreatEngine.analyzeScreenText(fullScreenText)
 
         val matchedUrgency = URGENCY_TRIGGERS.filter { lowerText.contains(it) }
         val matchedRemote = REMOTE_ACCESS_TRIGGERS.filter { lowerText.contains(it) }
@@ -236,7 +294,7 @@ class PaymentMonitorService : AccessibilityService() {
         performGlobalAction(GLOBAL_ACTION_HOME)
 
         // Action 3: Launch BlockOverlayService via Intent with payload
-        val appName = TARGET_UPI_PACKAGES[pkgName] ?: pkgName
+        val appName = TARGET_UPI_PACKAGES[pkgName] ?: SCANNER_PACKAGES[pkgName] ?: pkgName
         val overlayIntent = Intent(this, BlockOverlayService::class.java).apply {
             putExtra(EXTRA_REASON, reasonText)
             putExtra(EXTRA_TARGET_PACKAGE, pkgName)
@@ -260,36 +318,52 @@ class PaymentMonitorService : AccessibilityService() {
 
     /**
      * Recursive helper function that traverses the entire active node hierarchy (`rootInActiveWindow`),
-     * combining `node.text` and `node.contentDescription`.
+     * combining `node.text`, `node.contentDescription`, `node.hintText`, and `node.error`.
      */
     fun extractAllTextFromNode(node: AccessibilityNodeInfo?): String {
         if (node == null) return ""
-        val sb = StringBuilder()
-        collectTextRecursively(node, sb)
-        return sb.toString().trim()
+        val tokens = mutableListOf<String>()
+        collectTextRecursively(node, tokens)
+        return tokens.distinct().joinToString(" ").trim()
     }
 
-    private fun collectTextRecursively(node: AccessibilityNodeInfo?, sb: StringBuilder) {
+    private fun collectTextRecursively(node: AccessibilityNodeInfo?, tokens: MutableList<String>) {
         if (node == null) return
 
         node.text?.let {
             val s = it.toString().trim()
             if (s.isNotBlank()) {
-                sb.append(s).append(" ")
+                tokens.add(s)
             }
         }
 
         node.contentDescription?.let {
             val s = it.toString().trim()
             if (s.isNotBlank()) {
-                sb.append(s).append(" ")
+                tokens.add(s)
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            node.hintText?.let {
+                val s = it.toString().trim()
+                if (s.isNotBlank()) {
+                    tokens.add(s)
+                }
+            }
+        }
+
+        node.error?.let {
+            val s = it.toString().trim()
+            if (s.isNotBlank()) {
+                tokens.add(s)
             }
         }
 
         val childCount = node.childCount
         for (i in 0 until childCount) {
-            val child = node.getChild(i)
-            collectTextRecursively(child, sb)
+            val child = node.getChild(i) ?: continue
+            collectTextRecursively(child, tokens)
         }
     }
 
