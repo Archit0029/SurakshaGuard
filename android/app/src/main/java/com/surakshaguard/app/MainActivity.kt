@@ -107,6 +107,7 @@ class MainActivity : ComponentActivity() {
                         onRequestOverlay = { requestOverlayPermission() },
                         onRequestUsageAccess = { requestUsageAccessPermission() },
                         onRequestAccessibility = { requestAccessibilityPermission() },
+                        onOpenAppInfo = { openAppInfoForRestrictedSettings() },
                         onTestBlocker = { triggerTestBlocker() },
                         onTestQrBlocker = { sampleQr -> triggerQrBlockerTest(sampleQr) }
                     )
@@ -168,6 +169,14 @@ class MainActivity : ComponentActivity() {
 
     private fun requestAccessibilityPermission() {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        startActivity(intent)
+    }
+
+    private fun openAppInfoForRestrictedSettings() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:$packageName")
+        )
         startActivity(intent)
     }
 
@@ -288,6 +297,7 @@ fun SetupScreen(
     onRequestOverlay: () -> Unit,
     onRequestUsageAccess: () -> Unit,
     onRequestAccessibility: () -> Unit,
+    onOpenAppInfo: () -> Unit,
     onTestBlocker: () -> Unit,
     onTestQrBlocker: (String) -> Unit
 ) {
@@ -721,8 +731,11 @@ fun SetupScreen(
             title = "3. In-App QR Protection (Google Pay / PhonePe)",
             description = "Crucial for detecting fraud when scanning QRs inside Google Pay, PhonePe, or Paytm camera. Automatically inspects payee details and halts transactions if a scam is detected before you enter your UPI PIN.",
             isGranted = hasAccessibility,
-            buttonText = "Enable In-App QR Protection",
-            onAction = onRequestAccessibility
+            buttonText = "Step 2: Turn ON in Accessibility",
+            onAction = onRequestAccessibility,
+            secondaryButtonText = "🔓 Step 1: Open App Info (If Blocked)",
+            onSecondaryAction = onOpenAppInfo,
+            helpNotice = "⚠️ Android 13/14 Security Step:\nIf your phone shows 'Restricted Setting' / greyed out toggle:\n1. Tap 'Step 1: Open App Info' above\n2. Tap the 3 dots (⋮) in the top-right corner\n3. Tap 'Allow restricted settings' & enter phone PIN\n4. Return here and tap 'Step 2: Turn ON in Accessibility'"
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -829,7 +842,10 @@ fun PermissionCard(
     description: String,
     isGranted: Boolean,
     buttonText: String,
-    onAction: () -> Unit
+    onAction: () -> Unit,
+    secondaryButtonText: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
+    helpNotice: String? = null
 ) {
     Card(
         modifier = Modifier
@@ -879,7 +895,44 @@ fun PermissionCard(
             )
 
             if (!isGranted) {
-                Spacer(modifier = Modifier.height(12.dp))
+                if (helpNotice != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF261905))
+                            .border(1.dp, Color(0xFFD97706), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = helpNotice,
+                            color = Color(0xFFFDE68A),
+                            fontSize = 10.5.sp,
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
+
+                if (secondaryButtonText != null && onSecondaryAction != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = onSecondaryAction,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(vertical = 10.dp)
+                    ) {
+                        Text(
+                            text = secondaryButtonText,
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = onAction,
                     modifier = Modifier.fillMaxWidth(),
