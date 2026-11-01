@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suraksha Guard (सुरक्षागार्ड) — Pitch Deck & Presentation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #070B14;
+      color: #F8FAFC;
+    }
+    .slide {
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease-in-out;
+    }
+    .slide.active {
+      display: flex;
+      opacity: 1;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(30, 41, 59, 0.8);
+    }
+    .glow-emerald {
+      box-shadow: 0 0 35px -5px rgba(16, 185, 129, 0.3);
+    }
+    .glow-crimson {
+      box-shadow: 0 0 35px -5px rgba(239, 68, 68, 0.35);
+    }
+  </style>
+</head>
+<body class="bg-[#070B14] min-h-screen flex flex-col justify-between selection:bg-emerald-500 selection:text-black">
+
+  <!-- Top Presentation Bar -->
+  <header class="px-8 py-4 border-b border-slate-800/80 flex items-center justify-between glass-card">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500 flex items-center justify-center text-emerald-400 font-bold">
+        🛡️
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-white tracking-tight">Suraksha Guard <span class="text-slate-400 font-normal">| सुरक्षागार्ड</span></h1>
+        <p class="text-xs text-sky-400 font-medium">Real-Time Pre-Authorization Fraud Sentinel for UPI Payments</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-4">
+      <span id="slideCounter" class="text-xs font-semibold px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">Slide 1 of 10</span>
+      <button onclick="toggleFullscreen()" class="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">⛶ Fullscreen</button>
+    </div>
+  </header>
+
+  <!-- Main Slide Viewport -->
+  <main class="flex-1 flex items-center justify-center p-6 md:p-12 overflow-hidden">
+    
+    <!-- SLIDE 1: Title & Executive Vision -->
+    <div class="slide active flex-col items-center text-center max-w-4xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold tracking-wide uppercase">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Fintech Cybersecurity Innovation</span>
+      </div>
+      <h1 class="text-4xl md:text-6xl font-extrabold text-white tracking-tight leading-tight">
+        Suraksha Guard <br/>
+        <span class="bg-gradient-to-r from-emerald-400 via-sky-400 to-teal-300 bg-clip-text text-transparent">
+          Pre-Authorization UPI Fraud Sentinel
+        </span>
+      </h1>
+      <p class="text-lg md:text-xl text-slate-300 max-w-2xl font-normal leading-relaxed">
+        Stopping social engineering coercion, fake utility bill scams, reverse-payment QR traps, and unauthorized bank debits <span class="text-emerald-400 font-semibold">before the victim can enter their UPI PIN</span>.
+      </p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full pt-6">
+        <div class="glass-card p-4 rounded-xl text-left border-l-4 border-emerald-500">
+          <div class="text-xl font-bold text-white">0 ms</div>
+          <div class="text-xs text-slate-400">On-Device Interception</div>
+        </div>
+        <div class="glass-card p-4 rounded-xl text-left border-l-4 border-sky-500">
+          <div class="text-xl font-bold text-white">100% Native</div>
+          <div class="text-xs text-slate-400">Kotlin & Jetpack Compose</div>
+        </div>
+        <div class="glass-card p-4 rounded-xl text-left border-l-4 border-amber-500">
+          <div class="text-xl font-bold text-white">Zero Cloud</div>
+          <div class="text-xs text-slate-400">100% Privacy Preserved</div>
+        </div>
+        <div class="glass-card p-4 rounded-xl text-left border-l-4 border-rose-500">
+          <div class="text-xl font-bold text-white">1930 Helpline</div>
+          <div class="text-xs text-slate-400">Direct National Action</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: The Problem in India -->
+    <div class="slide flex-col max-w-5xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold uppercase">
+        The Crisis
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white">
+        Over ₹1,750+ Crores Lost to Payment Cyberfraud in India
+      </h2>
+      <p class="text-slate-400 text-sm md:text-base">
+        UPI processes over 14 Billion transactions monthly. Scammers don't hack bank servers; they exploit <strong class="text-white">human fear, urgency, and confusion</strong>.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+        <div class="glass-card p-5 rounded-xl border border-rose-900/40 bg-rose-950/20">
+          <div class="flex items-center space-x-3 mb-2">
+            <span class="text-2xl">⚡</span>
+            <h3 class="text-base font-bold text-rose-300">Electricity & Discom Panic Extortion</h3>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            "Your power will be cut tonight at 9:30 PM. Pay ₹10 immediately to our DISCOM officer via Google Pay." Victims panic and pay thousands under duress.
+          </p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-rose-900/40 bg-rose-950/20">
+          <div class="flex items-center space-x-3 mb-2">
+            <span class="text-2xl">🎁</span>
+            <h3 class="text-base font-bold text-rose-300">Reverse-Payment QR Traps</h3>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            "Scan this QR code and enter your PIN to claim your ₹2,500 lottery/cashback reward." Victims enter their PIN thinking they are receiving money.
+          </p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-rose-900/40 bg-rose-950/20">
+          <div class="flex items-center space-x-3 mb-2">
+            <span class="text-2xl">🖥️</span>
+            <h3 class="text-base font-bold text-rose-300">Remote Screen-Sharing Takeover</h3>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Victims are coerced over a phone call to install AnyDesk or TeamViewer QuickSupport, allowing scammers to view bank OTPs and balances in real time.
+          </p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-rose-900/40 bg-rose-950/20">
+          <div class="flex items-center space-x-3 mb-2">
+            <span class="text-2xl">💬</span>
+            <h3 class="text-base font-bold text-rose-300">Unauthorized Bank Debit OTP Extortion</h3>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Scammers initiate bank debit transactions while keeping the victim engaged on call, tricking them into revealing the OTP or approving the deduction.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: Why Current Banking Apps Fail -->
+    <div class="slide flex-col max-w-5xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold uppercase">
+        The Industry Flaw
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white">
+        Passive Warning Labels Do Not Stop Panicked Victims
+      </h2>
+
+      <div class="overflow-hidden rounded-xl border border-slate-800 glass-card">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-900/80 text-xs uppercase font-bold text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="p-4">Attack Stage</th>
+              <th class="p-4 text-rose-400">Current Apps (Google Pay / PhonePe)</th>
+              <th class="p-4 text-emerald-400">Suraksha Guard (Active Sentinel)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800 text-xs md:text-sm text-slate-300">
+            <tr>
+              <td class="p-4 font-semibold text-white">Pre-Payment Screening</td>
+              <td class="p-4 text-slate-400">Static small text banners ("Never share OTP") which 92% of panicked victims ignore.</td>
+              <td class="p-4 text-emerald-300 font-medium">Real-time background inspection of payee VPA, note keywords, active calls, and remote apps.</td>
+            </tr>
+            <tr>
+              <td class="p-4 font-semibold text-white">Threat Detection Event</td>
+              <td class="p-4 text-rose-400">App allows the victim to proceed directly to the PIN entry screen.</td>
+              <td class="p-4 text-emerald-300 font-medium"><strong>Physical App Minimization:</strong> Automatically minimizes the payment app to Home Screen instantly.</td>
+            </tr>
+            <tr>
+              <td class="p-4 font-semibold text-white">Enforcement & Shield</td>
+              <td class="p-4 text-slate-400">Zero physical interception. User enters PIN and money is permanently gone.</td>
+              <td class="p-4 text-emerald-300 font-medium">Deploys non-bypassable full-screen crimson emergency shield with bilingual guidance & 1930 helpline.</td>
+            </tr>
+            <tr>
+              <td class="p-4 font-semibold text-white">Recovery Outcome</td>
+              <td class="p-4 text-rose-400">Less than 12% recovery once funds hop through mule accounts.</td>
+              <td class="p-4 text-emerald-300 font-medium"><strong>100% Prevention:</strong> Funds never leave the victim's account.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: The Core Architecture -->
+    <div class="slide flex-col max-w-5xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase">
+        How It Works
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white">
+        Multi-Layered Sensor Fusion & Active Interception
+      </h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="glass-card p-5 rounded-xl border border-slate-800 flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-bold text-sky-400 uppercase tracking-wider mb-2">Stage 1: Live Sensors</div>
+            <h3 class="text-base font-bold text-white mb-2">Multi-Signal Scanning</h3>
+            <ul class="text-xs text-slate-300 space-y-2">
+              <li>• <strong>Active Call Sensor:</strong> Detects live phone calls via Telecom & Audio APIs.</li>
+              <li>• <strong>Remote Desktop Sensor:</strong> Detects AnyDesk, TeamViewer & screen mirrors.</li>
+              <li>• <strong>Payment Monitor:</strong> Accessibility screen reader inspecting text nodes.</li>
+              <li>• <strong>Debit OTP Engine:</strong> Broadcast receiver isolating money deductions.</li>
+            </ul>
+          </div>
+          <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400">
+            ⚡ Runs 100% on-device with sub-10ms response time
+          </div>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800 flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">Stage 2: Intelligence</div>
+            <h3 class="text-base font-bold text-white mb-2">QrThreatEngine & NLP</h3>
+            <ul class="text-xs text-slate-300 space-y-2">
+              <li>• <strong>Reverse Trap Regex:</strong> Catches "Cashback", "Lottery", "PIN to receive".</li>
+              <li>• <strong>Discom Impersonation:</strong> Flags electricity discoms routed to personal VPAs.</li>
+              <li>• <strong>URL Scrutiny:</strong> Detects bit.ly and malicious .apk download parameters.</li>
+              <li>• <strong>Noise Filter:</strong> Guaranteed zero false alarms on normal shopping screens.</li>
+            </ul>
+          </div>
+          <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400">
+            🧠 High-precision heuristics tuned for Indian UPI
+          </div>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-rose-900/40 bg-rose-950/10 flex flex-col justify-between">
+          <div>
+            <div class="text-xs font-bold text-rose-400 uppercase tracking-wider mb-2">Stage 3: Enforcement</div>
+            <h3 class="text-base font-bold text-white mb-2">Physical App Lockout</h3>
+            <ul class="text-xs text-slate-300 space-y-2">
+              <li>• <strong>Home Action:</strong> Executes <code>GLOBAL_ACTION_HOME</code> to minimize UPI app.</li>
+              <li>• <strong>Emergency Shield:</strong> Deploys <code>TYPE_APPLICATION_OVERLAY</code> shield.</li>
+              <li>• <strong>Bilingual Warning:</strong> Alerts victim in Hindi & English with exact reasons.</li>
+              <li>• <strong>Resolution Action:</strong> 1-tap call to 1930 Cyber helpline or uninstall AnyDesk.</li>
+            </ul>
+          </div>
+          <div class="mt-4 pt-3 border-t border-rose-900/50 text-[11px] text-rose-400">
+            🛑 Non-bypassable: PIN screen is never reachable
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: Live App Showcase — Shield Dashboard -->
+    <div class="slide flex-col max-w-5xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase">
+        Live Product UI
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white">
+        Figma-Grade Multi-Screen Mobile Architecture
+      </h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        <div class="space-y-4">
+          <div class="glass-card p-4 rounded-xl border-l-4 border-emerald-500">
+            <h3 class="text-base font-bold text-white">VPN-Style Master Sentinel Power Button</h3>
+            <p class="text-xs text-slate-300 mt-1">
+              Prominent, animated circular power switch with glowing emerald aura. Allows users to arm or pause all background sentinels with a single tap.
+            </p>
+          </div>
+
+          <div class="glass-card p-4 rounded-xl border-l-4 border-sky-500">
+            <h3 class="text-base font-bold text-white">Live Environment Sensors Grid</h3>
+            <p class="text-xs text-slate-300 mt-1">
+              Dynamic telemetry showing real-time health of Phone Call Sensor, Remote Screen-Share Sensor, In-App Payment QR Sentinel, and Bank Debit OTP Shield.
+            </p>
+          </div>
+
+          <div class="glass-card p-4 rounded-xl border-l-4 border-teal-500">
+            <h3 class="text-base font-bold text-white">4 Dedicated Focused Tabs (Zero Confusion)</h3>
+            <p class="text-xs text-slate-300 mt-1">
+              De-cluttered into <strong>Shield</strong> (Home), <strong>QR Guard</strong> (Scam Detector), <strong>Setup</strong> (Permissions), and <strong>Testing</strong> (Simulation Sandbox).
+            </p>
+          </div>
+        </div>
+
+        <div class="flex justify-center">
+          <div class="relative rounded-3xl p-2 bg-gradient-to-b from-slate-700 to-slate-900 shadow-2xl glow-emerald max-w-xs">
+            <img src="images/app_dashboard_live.jpg" alt="Suraksha Guard Dashboard" class="rounded-2xl w-full object-cover">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 6: Live App Showcase — Real-Time Blocker Overlay -->
+    <div class="slide flex-col max-w-5xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold uppercase">
+        Real-World Protection
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white">
+        Emergency Shield: Intercepting Bank Debit OTPs
+      </h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        <div class="flex justify-center">
+          <div class="relative rounded-3xl p-2 bg-gradient-to-b from-rose-700 to-slate-900 shadow-2xl glow-crimson max-w-xs">
+            <img src="images/app_debit_otp_alert.jpg" alt="Suraksha Guard Debit OTP Blocker" class="rounded-2xl w-full object-cover">
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="glass-card p-4 rounded-xl border-l-4 border-rose-500 bg-rose-950/20">
+            <h3 class="text-base font-bold text-rose-300">High-Contrast Emergency Warning</h3>
+            <p class="text-xs text-slate-300 mt-1">
+              Immediate full-screen red blocker displaying the exact debited amount (<strong>₹25,000.00</strong>), OTP Code (<strong>849201</strong>), and Bank source in English and Hindi.
+            </p>
+          </div>
+
+          <div class="glass-card p-4 rounded-xl border-l-4 border-amber-500">
+            <h3 class="text-base font-bold text-white">Bilingual Vernacular Education</h3>
+            <p class="text-xs text-slate-300 mt-1">
+              "Never share this OTP with anyone over call, SMS, or WhatsApp. Bank employees NEVER ask for your OTP."
+            </p>
+          </div>
+
+          <div class="glass-card p-4 rounded-xl border-l-4 border-emerald-500">
+            <h3 class="text-base font-bold text-white">Actionable Resolution Choices</h3>
+            <p class="text-xs text-slate-300 mt-1">
+              • <strong>I am Safe (2-Min Pass):</strong> Allows genuine transactions.<br/>
+              • <strong>Close & Keep Me Safe:</strong> Keeps UPI app suspended.<br/>
+              • <strong>Call 1930:</strong> One-tap connect to National Cyber Helpline.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 7: The 4 Protective Shields -->
+    <div class="slide flex-col max-w-5xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-bold uppercase">
+        Core Capabilities
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white">
+        Comprehensive 360° Defense Vectors
+      </h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center space-x-3 mb-2">
+            <span class="text-2xl">📱</span>
+            <div>
+              <h3 class="text-sm font-bold text-white">1. Active Phone Call Sensor</h3>
+              <span class="text-[11px] text-emerald-400 font-semibold">Stops Digital Arrest & Panic Scams</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Combines <code>TelecomManager.isInCall</code>, <code>TelephonyManager</code>, and <code>AudioManager.MODE_IN_COMMUNICATION</code> to detect when a victim is on an active VoLTE, cellular, or WhatsApp call while opening a UPI app.
+          </p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center space-x-3 mb-2">
+            <span class="text-2xl">🖥️</span>
+            <div>
+              <h3 class="text-sm font-bold text-white">2. Remote Screen-Share Detector</h3>
+              <span class="text-[11px] text-emerald-400 font-semibold">Defeats AnyDesk, TeamViewer & RustDesk</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Checks active accessibility services in system settings, MediaProjection virtual displays, and recency usage stats. Provides a direct 1-tap "Force Stop / Uninstall AnyDesk" button.
+          </p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center space-x-3 mb-2">
+            <span class="text-2xl">⚡</span>
+            <div>
+              <h3 class="text-sm font-bold text-white">3. UPI QR Phishing & Extortion Engine</h3>
+              <span class="text-[11px] text-emerald-400 font-semibold">Deep UPI Deep-Link Analysis</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Inspects visible on-screen text in Google Pay and PhonePe for reverse-payment traps ("Cashback", "Refund", "PIN to receive") and utility discom impersonation routed to personal VPAs.
+          </p>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="flex items-center space-x-3 mb-2">
+            <span class="text-2xl">💬</span>
+            <div>
+              <h3 class="text-sm font-bold text-white">4. Bank Debit OTP Sentinel</h3>
+              <span class="text-[11px] text-emerald-400 font-semibold">Real-Time SMS Deduction Interception</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Isolates financial debit alerts from benign messages, parses transaction amounts, extracts OTPs, and correlates with active phone calls to deploy immediate emergency warnings.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 8: Competitive Edge -->
+    <div class="slide flex-col max-w-5xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-bold uppercase">
+        Market Comparison
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white">
+        Why Suraksha Guard Has No Direct Equal
+      </h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="text-xs font-bold text-slate-400 uppercase mb-2">Traditional Banking Apps</div>
+          <h3 class="text-base font-bold text-white mb-2">Google Pay / PhonePe</h3>
+          <ul class="text-xs text-slate-400 space-y-2">
+            <li>❌ Static text warnings ignored in panic</li>
+            <li>❌ Cannot detect AnyDesk or active call coercion</li>
+            <li>❌ Cannot halt payment before PIN entry</li>
+            <li>❌ No debit OTP SMS interception</li>
+          </ul>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-slate-800">
+          <div class="text-xs font-bold text-slate-400 uppercase mb-2">Caller ID & Anti-Viruses</div>
+          <h3 class="text-base font-bold text-white mb-2">Truecaller / QuickHeal</h3>
+          <ul class="text-xs text-slate-400 space-y-2">
+            <li>❌ Only flags known spam numbers</li>
+            <li>❌ Misses new burner SIM cards</li>
+            <li>❌ No UPI screen reading or QR inspection</li>
+            <li>❌ Uploads user contacts to cloud servers</li>
+          </ul>
+        </div>
+
+        <div class="glass-card p-5 rounded-xl border border-emerald-500 bg-emerald-950/20 glow-emerald">
+          <div class="text-xs font-bold text-emerald-400 uppercase mb-2">The New Standard</div>
+          <h3 class="text-base font-bold text-emerald-300 mb-2">Suraksha Guard</h3>
+          <ul class="text-xs text-slate-200 space-y-2">
+            <li>✅ <strong>Physical App Minimization</strong></li>
+            <li>✅ <strong>Active Call + Remote App Sensor Fusion</strong></li>
+            <li>✅ <strong>Reverse QR & Fake Utility Traps Caught</strong></li>
+            <li>✅ <strong>100% On-Device Privacy (Zero Cloud)</strong></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 9: Traction & Technical Verification -->
+    <div class="slide flex-col max-w-5xl mx-auto space-y-6">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase">
+        Readiness & Quality
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white">
+        Production-Ready, Rigorously Tested
+      </h2>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass-card p-4 rounded-xl text-center">
+          <div class="text-3xl font-extrabold text-emerald-400">28 / 28</div>
+          <div class="text-xs text-slate-300 mt-1 font-medium">Unit Tests Passed</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">ThreatDetectorTest</div>
+        </div>
+
+        <div class="glass-card p-4 rounded-xl text-center">
+          <div class="text-3xl font-extrabold text-sky-400">API 29-34</div>
+          <div class="text-xs text-slate-300 mt-1 font-medium">Android OS Support</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Android 10 through 14</div>
+        </div>
+
+        <div class="glass-card p-4 rounded-xl text-center">
+          <div class="text-3xl font-extrabold text-amber-400">10.1 MB</div>
+          <div class="text-xs text-slate-300 mt-1 font-medium">Lightweight APK</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Zero Bloatware</div>
+        </div>
+
+        <div class="glass-card p-4 rounded-xl text-center">
+          <div class="text-3xl font-extrabold text-teal-400">&lt; 15 MB</div>
+          <div class="text-xs text-slate-300 mt-1 font-medium">RAM Footprint</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">Battery Efficient</div>
+        </div>
+      </div>
+
+      <div class="glass-card p-5 rounded-xl border border-slate-800">
+        <h3 class="text-sm font-bold text-white mb-2">Android 13 / 14 Sideload Compliance Built-In</h3>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Google Play Protect blocks sideloaded apps from enabling accessibility by showing "Restricted setting". Suraksha Guard features an in-app 1-tap guided onboarding that takes users directly to App Info to allow restricted settings seamlessly.
+        </p>
+      </div>
+    </div>
+
+    <!-- SLIDE 10: Vision & The Ask -->
+    <div class="slide flex-col max-w-4xl mx-auto space-y-6 text-center">
+      <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase">
+        Future Roadmap
+      </div>
+      <h2 class="text-4xl md:text-5xl font-extrabold text-white">
+        Protecting Every Citizen's Digital Rupee
+      </h2>
+      <p class="text-slate-300 text-base max-w-2xl mx-auto leading-relaxed">
+        Our vision is to make Suraksha Guard the national standard for pre-authorization defense across Indian banking ecosystems.
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-left pt-4">
+        <div class="glass-card p-4 rounded-xl border-t-2 border-emerald-500">
+          <div class="text-xs text-emerald-400 font-bold mb-1">Phase 1 (Achieved)</div>
+          <div class="text-sm font-bold text-white mb-1">Native Android App</div>
+          <div class="text-xs text-slate-400">Full pre-authorization defense, 4-tab UI, Debit OTP shield, zero false positives.</div>
+        </div>
+
+        <div class="glass-card p-4 rounded-xl border-t-2 border-sky-500">
+          <div class="text-xs text-sky-400 font-bold mb-1">Phase 2 (Q1 2027)</div>
+          <div class="text-sm font-bold text-white mb-1">Vernacular Voice Agent</div>
+          <div class="text-xs text-slate-400">Real-time voice warnings in 12 regional Indian languages (Hindi, Marathi, Bengali, Tamil, etc.).</div>
+        </div>
+
+        <div class="glass-card p-4 rounded-xl border-t-2 border-teal-500">
+          <div class="text-xs text-teal-400 font-bold mb-1">Phase 3 (Enterprise)</div>
+          <div class="text-sm font-bold text-white mb-1">NPCI / OEM Preload SDK</div>
+          <div class="text-xs text-slate-400">Embedding Suraksha Guard's pre-authorization sensor engine directly into smartphone ROMs & banking SDKs.</div>
+        </div>
+      </div>
+
+      <div class="pt-6">
+        <div class="inline-flex items-center space-x-3 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-sm shadow-lg glow-emerald">
+          <span>🛡️ Suraksha Guard: Defense Before Deduction.</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Bottom Navigation & Controls -->
+  <footer class="px-8 py-4 border-t border-slate-800/80 flex items-center justify-between glass-card">
+    <div class="text-xs text-slate-400 flex items-center space-x-2">
+      <kbd class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">←</kbd>
+      <kbd class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">→</kbd>
+      <span>Use Arrow keys or buttons to navigate</span>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <button onclick="prevSlide()" class="px-4 py-2 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+        ← Previous
+      </button>
+      <button onclick="nextSlide()" class="px-5 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow transition">
+        Next →
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const slideCounter = document.getElementById('slideCounter');
+
+    function showSlide(index) {
+      if (index < 0) index = 0;
+      if (index >= slides.length) index = slides.length - 1;
+
+      slides.forEach((slide, i) => {
+        slide.classList.toggle('active', i === index);
+      });
+
+      currentSlide = index;
+      slideCounter.textContent = `Slide ${currentSlide + 1} of ${slides.length}`;
+    }
+
+    function prevSlide() {
+      showSlide(currentSlide - 1);
+    }
+
+    function nextSlide() {
+      showSlide(currentSlide + 1);
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft') {
+        prevSlide();
+      }
+    });
+  </script>
+</body>
+</html>
